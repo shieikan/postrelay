@@ -1,0 +1,914 @@
+--- a/src/autopush.rs
++++ b/src/autopush.rs
+@@ -295,12 +295,8 @@
+                             status
+                         )));
+                     }
+-                    debug!(
+-                        ?use_webpush,
+-                        ?broadcasts,
+-                        "hello response extra fields"
+-                    );
+-                    info!("hello succeeded: uaid={}", uaid);
++                    debug!(webpush_flag_received = use_webpush.is_some(), broadcasts_received = broadcasts.is_some(), "hello response received");
++                    info!("hello succeeded");
+                     uaid
+                 }
+                 _ => {
+@@ -338,7 +334,7 @@
+     let register_json = serde_json::to_string(&register_msg)?;
+     ws.send(Message::Text(register_json.into())).await?;
+ 
+-    debug!("register sent: channel_id={}", channel_id);
++    debug!("register sent");
+ 
+     // 4. Receive register response (timeout: 10s)
+     let endpoint =
+@@ -357,7 +353,7 @@
+                                 status
+                             )));
+                         }
+-                        info!("register succeeded: endpoint={}", push_endpoint);
++                        info!("register succeeded");
+                         push_endpoint
+                     }
+                     _ => {
+@@ -415,7 +411,7 @@
+     session: &AutoPushSession,
+     _keys: &WebPushKeys,
+ ) -> Result<ConnectResult> {
+-    info!("reconnecting to AutoPush: uaid={}", session.uaid);
++    info!("reconnecting to AutoPush");
+ 
+     let mut ws = connect_ws(AUTOPUSH_WS_URL).await?;
+ 
+@@ -448,17 +444,9 @@
+                             status
+                         )));
+                     }
+-                    debug!(
+-                        ?use_webpush,
+-                        ?broadcasts,
+-                        "hello response extra fields"
+-                    );
++                    debug!(webpush_flag_received = use_webpush.is_some(), broadcasts_received = broadcasts.is_some(), "hello response received");
+                     if uaid != session.uaid {
+-                        warn!(
+-                            old_uaid = %session.uaid,
+-                            new_uaid = %uaid,
+-                            "UAID invalidated, generating new keys and re-registering"
+-                        );
++                        warn!("UAID invalidated, generating new keys and re-registering");
+ 
+                         let _ = ws.close(None).await;
+ 
+@@ -468,14 +456,14 @@
+ 
+                         let registration = register_new(&new_keys).await?;
+ 
+-                        info!(new_uaid = %registration.uaid, "re-registration complete");
++                        info!("re-registration complete");
+ 
+                         return Ok(ConnectResult::NeedsReregistration(ReregistrationInfo {
+                             registration,
+                             keys: new_keys,
+                         }));
+                     }
+-                    info!("hello succeeded (reconnect): uaid={}", uaid);
++                    info!("hello succeeded (reconnect)");
+                 }
+                 _ => {
+                     return Err(AngelicAngelError::AutoPush(
+@@ -552,7 +540,7 @@
+                                 } => {
+                                     // Duplicate detection (track last 100 message IDs).
+                                     if self.recent_message_ids_set.contains(&version) {
+-                                        warn!(version = %version, "duplicate notification detected, skipping");
++                                        warn!("duplicate notification detected, skipping");
+                                         // Still ACK duplicates so the server stops retrying.
+                                         self.ack_notification(
+                                             channel_id,
+@@ -570,11 +558,7 @@
+                                     self.recent_message_ids.push_back(version.clone());
+                                     self.recent_message_ids_set.insert(version.clone());
+ 
+-                                    info!(
+-                                        channel_id = %channel_id,
+-                                        version = %version,
+-                                        "notification received"
+-                                    );
++                                    info!("notification received");
+                                     return Ok(Some(Notification {
+                                         channel_id,
+                                         version,
+@@ -582,8 +566,8 @@
+                                         headers,
+                                     }));
+                                 }
+-                                other => {
+-                                    debug!(?other, "non-notification message received");
++                                _other => {
++                                    debug!("non-notification message received");
+                                     continue;
+                                 }
+                             }
+@@ -607,8 +591,8 @@
+                             info!("WebSocket closed by server");
+                             return Ok(None);
+                         }
+-                        Some(Ok(msg)) => {
+-                            debug!(?msg, "unexpected message type");
++                        Some(Ok(_msg)) => {
++                            debug!("unexpected message type");
+                             continue;
+                         }
+                         Some(Err(e)) => {
+@@ -692,11 +676,7 @@
+                             data,
+                             headers,
+                         }) => {
+-                            info!(
+-                                channel_id = %channel_id,
+-                                version = %version,
+-                                "notification received while waiting for pong"
+-                            );
++                            info!("notification received while waiting for pong");
+                             return Ok(PongWaitResult::NotificationReceived(Notification {
+                                 channel_id,
+                                 version,
+@@ -704,8 +684,8 @@
+                                 headers,
+                             }));
+                         }
+-                        Ok(other) => {
+-                            debug!(?other, "non-notification message while waiting for pong");
++                        Ok(_other) => {
++                            debug!("non-notification message while waiting for pong");
+                             continue;
+                         }
+                         Err(e) => return Err(e.into()),
+@@ -768,11 +748,7 @@
+ 
+ /// Unregisters a channel from AutoPush.
+ pub async fn unregister(session: &AutoPushSession) -> Result<()> {
+-    info!(
+-        uaid = %session.uaid,
+-        channel_id = %session.channel_id,
+-        "starting AutoPush unregistration"
+-    );
++    info!("starting AutoPush unregistration");
+ 
+     let mut ws = connect_ws(AUTOPUSH_WS_URL).await?;
+ 
+@@ -793,14 +769,14 @@
+         Ok(Some(Ok(Message::Text(text)))) => {
+             let resp: AutoPushResponse = serde_json::from_str(&text)?;
+             match resp {
+-                AutoPushResponse::Hello { status, uaid, .. } => {
++                AutoPushResponse::Hello { status, uaid: _, .. } => {
+                     if status != 200 {
+                         return Err(AngelicAngelError::AutoPush(format!(
+                             "hello failed (unregister): status={}",
+                             status
+                         )));
+                     }
+-                    info!("hello succeeded (unregister): uaid={}", uaid);
++                    info!("hello succeeded (unregister)");
+                 }
+                 _ => {
+                     return Err(AngelicAngelError::AutoPush(
+@@ -836,7 +812,7 @@
+     let unregister_json = serde_json::to_string(&unregister_msg)?;
+     ws.send(Message::Text(unregister_json.into())).await?;
+ 
+-    debug!(channel_id = %session.channel_id, "unregister sent");
++    debug!("unregister sent");
+ 
+     // 4. Disconnect.
+     ws.close(None).await?;
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -1,52 +1,121 @@
+ use crate::error::{Result, AngelicAngelError};
+ use serde::{Deserialize, Serialize};
+-use std::path::Path;
+-
+-#[derive(Debug, Clone, Serialize, Deserialize)]
++use std::path::{Component, Path, PathBuf};
++use std::io::Write;
++
++#[derive(Clone, Serialize, Deserialize)]
+ pub struct Config {
+     pub twitter: TwitterConfig,
+     pub registration: Option<Registration>,
+ }
+ 
+-#[derive(Debug, Clone, Serialize, Deserialize)]
++#[derive(Clone, Serialize, Deserialize)]
+ pub struct TwitterConfig {
+     pub auth_token: String,
+     pub ct0: String,
+ }
+ 
+-#[derive(Debug, Clone, Serialize, Deserialize)]
++#[derive(Clone, Serialize, Deserialize)]
+ pub struct WebPushKeys {
+     pub public_key: Vec<u8>,
+     pub private_key: Vec<u8>,
+     pub auth_secret: Vec<u8>,
+ }
+ 
+-#[derive(Debug, Clone, Serialize, Deserialize)]
++#[derive(Clone, Serialize, Deserialize)]
+ pub struct AutoPushSession {
+     pub uaid: String,
+     pub channel_id: String,
+ }
+ 
+-#[derive(Debug, Clone, Serialize, Deserialize)]
++#[derive(Clone, Serialize, Deserialize)]
+ pub struct Registration {
+     pub endpoint: String,
+     pub autopush: AutoPushSession,
+     pub keys: WebPushKeys,
+ }
+ 
++// Secret-bearing configuration types never reveal values through Debug.
++macro_rules! redacted_debug {
++    ($($kind:ty),+) => {$ (
++        impl std::fmt::Debug for $kind {
++            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++                f.write_str(concat!(stringify!($kind), " { redacted }"))
++            }
++        }
++    )+};
++}
++redacted_debug!(Config, TwitterConfig, WebPushKeys, AutoPushSession, Registration);
++
++fn private_config_path(path: &Path) -> Result<PathBuf> {
++    if path.components().any(|part| matches!(part, Component::ParentDir)) || path.file_name().is_none() {
++        return Err(AngelicAngelError::Config("invalid config path".into()));
++    }
++    let absolute = if path.is_absolute() { path.to_path_buf() } else { std::env::current_dir()?.join(path) };
++    let parent = absolute.parent().ok_or_else(|| AngelicAngelError::Config("missing config parent".into()))?;
++    let mut checked = PathBuf::new();
++    for part in parent.components() {
++        checked.push(part.as_os_str());
++        let metadata = std::fs::symlink_metadata(&checked)?;
++        if metadata.file_type().is_symlink() || !metadata.is_dir() {
++            return Err(AngelicAngelError::Config("config parent must be an existing real directory".into()));
++        }
++    }
++    #[cfg(unix)] {
++        use std::os::unix::fs::PermissionsExt;
++        if std::fs::metadata(parent)?.permissions().mode() & 0o077 != 0 {
++            return Err(AngelicAngelError::Config("config parent must be private (0700)".into()));
++        }
++    }
++    match std::fs::symlink_metadata(&absolute) {
++        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() =>
++            Err(AngelicAngelError::Config("config must be a regular file, not a link".into())),
++        Ok(_) => Ok(absolute),
++        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(absolute),
++        Err(error) => Err(error.into()),
++    }
++}
++
+ impl Config {
+     pub fn load(path: &Path) -> Result<Self> {
+-        let content = std::fs::read_to_string(path).map_err(|e| {
+-            AngelicAngelError::Config(format!("failed to read config ({}): {}", path.display(), e))
+-        })?;
++        let path = private_config_path(path)?;
++        #[cfg(unix)] {
++            use std::os::unix::fs::PermissionsExt;
++            if std::fs::metadata(&path)?.permissions().mode() & 0o077 != 0 {
++                return Err(AngelicAngelError::Config("config file must be private (0600)".into()));
++            }
++        }
++        let content = std::fs::read_to_string(path)?;
+         toml::from_str(&content).map_err(Into::into)
+     }
+ 
+     pub fn save(&self, path: &Path) -> Result<()> {
++        let path = private_config_path(path)?;
+         let content = toml::to_string_pretty(self)
+-            .map_err(|e| AngelicAngelError::Config(format!("failed to serialize config: {}", e)))?;
+-        std::fs::write(path, content)?;
+-        Ok(())
++            .map_err(|_| AngelicAngelError::Config("failed to serialize config".into()))?;
++        let temporary = path.parent().unwrap().join(format!(".angelic-config-{}.tmp", uuid::Uuid::new_v4()));
++        let mut options = std::fs::OpenOptions::new();
++        options.write(true).create_new(true);
++        #[cfg(unix)] {
++            use std::os::unix::fs::OpenOptionsExt;
++            options.mode(0o600);
++        }
++        let mut file = options.open(&temporary)?;
++        let saved = (|| -> Result<()> {
++            #[cfg(unix)] {
++                use std::os::unix::fs::PermissionsExt;
++                file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
++            }
++            file.write_all(content.as_bytes())?;
++            file.sync_all()?;
++            // Revalidate before atomically replacing the destination. The existing
++            // private parent is required; this function never creates directories.
++            private_config_path(&path)?;
++            std::fs::rename(&temporary, &path)?;
++            Ok(())
++        })();
++        if saved.is_err() { let _ = std::fs::remove_file(&temporary); }
++        saved
+     }
+ }
+ 
+@@ -56,3 +125,97 @@
+         AngelicAngelError::Config("WEBHOOK_ENDPOINT environment variable is not set".to_string())
+     })
+ }
++
++#[cfg(all(test, unix))]
++mod hardening_tests {
++    use super::*;
++    use std::os::unix::fs::PermissionsExt;
++
++    #[test]
++    fn saved_config_is_private_even_when_file_already_exists() {
++        let dir = std::env::temp_dir().canonicalize().unwrap().join(format!("angelic-hardening-{}", uuid::Uuid::new_v4()));
++        std::fs::create_dir(&dir).unwrap();
++        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
++        let path = dir.join("config.toml");
++        std::fs::write(&path, "placeholder").unwrap();
++        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
++        let config = Config { twitter: TwitterConfig { auth_token: "synthetic_cookie".into(), ct0: "synthetic_csrf".into() }, registration: None };
++        config.save(&path).unwrap();
++        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
++        std::fs::remove_dir_all(&dir).unwrap();
++        assert_eq!(mode, 0o600);
++    }
++    fn private_directory() -> PathBuf {
++        let dir = std::env::temp_dir().canonicalize().unwrap().join(format!("angelic-hardening-{}", uuid::Uuid::new_v4()));
++        std::fs::create_dir(&dir).unwrap();
++        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
++        dir
++    }
++
++    fn synthetic_config() -> Config {
++        Config { twitter: TwitterConfig { auth_token: "synthetic_cookie_marker".into(), ct0: "synthetic_csrf_marker".into() }, registration: None }
++    }
++
++    #[test]
++    fn new_config_roundtrips_at_private_permissions() {
++        let dir = private_directory();
++        let path = dir.join("config.toml");
++        synthetic_config().save(&path).unwrap();
++        let loaded = Config::load(&path).unwrap();
++        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
++        assert_eq!(mode, 0o600);
++        assert_eq!(loaded.twitter.auth_token, "synthetic_cookie_marker");
++        assert!(!format!("{loaded:?}").contains("synthetic_cookie_marker"));
++        assert!(!format!("{:?}", loaded.twitter).contains("synthetic_csrf_marker"));
++        std::fs::remove_dir_all(dir).unwrap();
++    }
++
++    #[test]
++    fn config_links_are_rejected_without_modifying_target() {
++        use std::os::unix::fs::symlink;
++        let dir = private_directory();
++        let target = dir.join("target.toml");
++        std::fs::write(&target, "unchanged").unwrap();
++        let link = dir.join("config.toml");
++        symlink(&target, &link).unwrap();
++        assert!(synthetic_config().save(&link).is_err());
++        assert!(Config::load(&link).is_err());
++        assert_eq!(std::fs::read_to_string(&target).unwrap(), "unchanged");
++        let real = dir.join("real");
++        std::fs::create_dir(&real).unwrap();
++        std::fs::set_permissions(&real, std::fs::Permissions::from_mode(0o700)).unwrap();
++        let parent_link = dir.join("parent-link");
++        symlink(&real, &parent_link).unwrap();
++        assert!(synthetic_config().save(&parent_link.join("config.toml")).is_err());
++        assert!(!real.join("config.toml").exists());
++        std::fs::remove_dir_all(dir).unwrap();
++    }
++
++    #[test]
++    fn config_save_does_not_create_directories_and_requires_private_parent() {
++        let dir = private_directory();
++        let missing = dir.join("missing");
++        assert!(synthetic_config().save(&missing.join("config.toml")).is_err());
++        assert!(!missing.exists());
++        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
++        assert!(synthetic_config().save(&dir.join("config.toml")).is_err());
++        assert!(!dir.join("config.toml").exists());
++        std::fs::remove_dir_all(dir).unwrap();
++    }
++
++    #[test]
++    fn insecure_config_reads_and_parser_diagnostics_are_safe() {
++        let dir = private_directory();
++        let path = dir.join("config.toml");
++        synthetic_config().save(&path).unwrap();
++        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
++        assert!(Config::load(&path).is_err());
++        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
++        std::fs::write(&path, "auth_token = 'synthetic_cookie_marker'
++[unclosed").unwrap();
++        let error = Config::load(&path).unwrap_err();
++        assert!(!format!("{error} {error:?}").contains("synthetic_cookie_marker"));
++        std::fs::remove_dir_all(dir).unwrap();
++    }
++
++}
+--- a/src/error.rs
++++ b/src/error.rs
+@@ -1,40 +1,92 @@
+ use thiserror::Error;
+ 
+-#[derive(Error, Debug)]
++#[derive(Error)]
+ pub enum AngelicAngelError {
+-    #[error("config error: {0}")]
++    #[error("configuration error; check values and private file permissions")]
+     Config(String),
+ 
+-    #[error("AutoPush error: {0}")]
++    #[error("AutoPush connection or protocol error")]
+     AutoPush(String),
+ 
+-    #[error("Twitter API error: {0}")]
++    #[error("X push registration failed; check account authorization and connectivity")]
+     TwitterApi(String),
+ 
+-    #[error("WebSocket error: {0}")]
++    #[error("WebSocket connection or protocol error")]
+     WebSocket(#[from] tokio_tungstenite::tungstenite::Error),
+ 
+-    #[error("decryption error: {0}")]
++    #[error("notification decryption failed")]
+     Decryption(String),
+ 
+-    #[error("ECE error: {0}")]
++    #[error("notification encryption error")]
+     #[allow(dead_code)]
+     Ece(String),
+ 
+-    #[error("IO error: {0}")]
++    #[error("local IO error")]
+     Io(#[from] std::io::Error),
+ 
+-    #[error("HTTP error: {0}")]
++    #[error("HTTP request failed; check connectivity or timeout")]
+     Http(#[from] reqwest::Error),
+ 
+-    #[error("JSON error: {0}")]
++    #[error("invalid JSON data")]
+     Json(#[from] serde_json::Error),
+ 
+-    #[error("TOML error: {0}")]
++    #[error("invalid configuration data")]
+     Toml(#[from] toml::de::Error),
+ 
+-    #[error("base64 decode error: {0}")]
++    #[error("webhook rejected notification (HTTP {0})")]
++    Webhook(u16),
++
++    #[error("invalid base64 data")]
+     Base64Decode(#[from] base64::DecodeError),
+ }
+ 
++// Formatting is deliberately independent of underlying errors: HTTP errors can
++// include secret URLs, and parser errors can quote configuration or payloads.
++impl std::fmt::Debug for AngelicAngelError {
++    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        std::fmt::Display::fmt(self, formatter)
++    }
++}
++
++impl AngelicAngelError {
++    pub fn requests_server_backoff(&self) -> bool {
++        matches!(self, Self::AutoPush(reason) if reason.starts_with("BACKOFF:"))
++    }
++
++    pub fn requires_reregistration(&self) -> bool {
++        matches!(self, Self::AutoPush(reason)
++            if reason.contains("UAID invalid") || reason.contains("still failed after re-registration"))
++    }
++}
++
+ pub type Result<T> = std::result::Result<T, AngelicAngelError>;
++
++#[cfg(test)]
++mod hardening_tests {
++    use super::*;
++
++    #[test]
++    fn redaction_preserves_reconnection_classification() {
++        let backoff = AngelicAngelError::AutoPush("BACKOFF: server requested backoff".into());
++        assert!(backoff.requests_server_backoff());
++        assert!(!backoff.requires_reregistration());
++        assert!(!backoff.to_string().contains("BACKOFF:"));
++        for reason in ["UAID invalid", "still failed after re-registration"] {
++            let error = AngelicAngelError::AutoPush(reason.into());
++            assert!(error.requires_reregistration());
++            assert!(!error.requests_server_backoff());
++        }
++        assert!(!AngelicAngelError::AutoPush("ordinary timeout".into()).requires_reregistration());
++        assert!(!AngelicAngelError::Http(reqwest::Client::new().get("not a URL").build().unwrap_err()).requests_server_backoff());
++    }
++
++    #[test]
++    fn errors_do_not_expose_untrusted_details_in_display_or_debug() {
++        let marker = "synthetic_cookie_or_payload_marker";
++        let errors = [AngelicAngelError::Config(marker.into()), AngelicAngelError::AutoPush(marker.into()), AngelicAngelError::TwitterApi(marker.into()), AngelicAngelError::Decryption(marker.into())];
++        for error in errors {
++            assert!(!format!("{error}").contains(marker));
++            assert!(!format!("{error:?}").contains(marker));
++        }
++    }
++}
+--- a/src/listener.rs
++++ b/src/listener.rs
+@@ -58,7 +58,7 @@
+                 tokio::time::sleep(Duration::from_secs(1)).await;
+             }
+             SessionOutcome::DisconnectedAfterConnect(e) => {
+-                if e.to_string().contains("BACKOFF:") {
++                if e.requests_server_backoff() {
+                     tracing::warn!("server requested backoff, delaying reconnect for 30 minutes");
+                     tokio::time::sleep(Duration::from_secs(30 * 60)).await;
+                 } else {
+@@ -91,9 +91,7 @@
+     let mut client = match try_connect(registration, config_path).await {
+         Ok(client) => client,
+         Err(e) => {
+-            if e.to_string().contains("UAID invalid")
+-                || e.to_string().contains("still failed after re-registration")
+-            {
++            if e.requires_reregistration() {
+                 return SessionOutcome::Fatal(e);
+             }
+             return SessionOutcome::ConnectionFailed(e);
+@@ -122,11 +120,7 @@
+             let new_reg = &reregistration_info.registration;
+             let new_keys = reregistration_info.keys;
+ 
+-            tracing::warn!(
+-                new_uaid = %new_reg.uaid,
+-                new_channel_id = %new_reg.channel_id,
+-                "UAID invalidated (pushsubscriptionchange), re-registering"
+-            );
++            tracing::warn!("UAID invalidated (pushsubscriptionchange), re-registering");
+ 
+             tracing::info!("re-registering with Twitter API");
+             let mut full_config = config::Config::load(config_path)?;
+@@ -167,11 +161,7 @@
+     registration: &Registration,
+ ) -> Result<()> {
+     while let Some(notification) = client.next_notification().await? {
+-        tracing::info!(
+-            channel_id = %notification.channel_id,
+-            version = %notification.version,
+-            "notification received"
+-        );
++        tracing::info!("notification received");
+ 
+         let ack_code = if let Some(ref data) = notification.data {
+             match handle_notification_data(data, &notification.headers, &registration.keys).await {
+@@ -197,11 +187,7 @@
+                 ack_code,
+             )
+             .await?;
+-        tracing::debug!(
+-            channel_id = %notification.channel_id,
+-            ack_code = ?ack_code,
+-            "ACK sent"
+-        );
++        tracing::debug!(ack_code = ?ack_code, "ACK sent");
+     }
+ 
+     Ok(())
+@@ -221,9 +207,6 @@
+ 
+     tracing::debug!(encrypted_size = encrypted.len(), "decoding encrypted message");
+ 
+-    if let Some(hdrs) = headers {
+-        tracing::debug!(?hdrs, "notification headers");
+-    }
+ 
+     let decrypted = match decrypt_ece(&encrypted, headers, keys) {
+         Ok(decrypted) => {
+@@ -233,7 +216,6 @@
+         Err(e) => {
+             tracing::error!(
+                 error = %e,
+-                encrypted_head = ?&encrypted[..encrypted.len().min(16)],
+                 "ECE decryption failed"
+             );
+             return Err(e);
+@@ -246,7 +228,7 @@
+     let payload: serde_json::Value =
+         serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({ "raw": text }));
+ 
+-    tracing::info!(payload = %payload, "notification decrypted");
++    tracing::info!("notification decrypted");
+ 
+     send_to_webhook(&payload).await?;
+ 
+@@ -254,25 +236,32 @@
+ }
+ 
+ /// Sends the decrypted notification payload to the configured webhook endpoint via HTTP POST.
++const WEBHOOK_TIMEOUT: Duration = Duration::from_secs(10);
++
++fn webhook_client(timeout: Duration) -> Result<Client> {
++    Ok(Client::builder()
++        .timeout(timeout)
++        .connect_timeout(timeout)
++        .redirect(reqwest::redirect::Policy::none())
++        .no_proxy()
++        .build()?)
++}
++
+ async fn send_to_webhook(payload: &serde_json::Value) -> Result<()> {
+     let webhook_url = config::get_webhook_endpoint()?;
+-    let client = Client::new();
+-
+-    tracing::info!(url = %webhook_url, "sending to webhook");
+-
+-    let response = client.post(&webhook_url).json(payload).send().await?;
+-
+-    if !response.status().is_success() {
+-        let status = response.status();
+-        let error_text = response
+-            .text()
+-            .await
+-            .unwrap_or_else(|_| String::from("failed to read response body"));
+-        tracing::warn!(status = %status, body = %error_text, "webhook request failed");
+-    } else {
+-        tracing::info!(status = %response.status(), "webhook request succeeded");
+-    }
+-
++    send_to_webhook_with_client(payload, &webhook_url, &webhook_client(WEBHOOK_TIMEOUT)?).await
++}
++
++async fn send_to_webhook_with_client(payload: &serde_json::Value, webhook_url: &str, client: &Client) -> Result<()> {
++    tracing::info!("sending to webhook");
++    let response = client.post(webhook_url).json(payload).send().await?;
++    let status = response.status();
++    if !status.is_success() {
++        // Do not read or log a receiver's response body. Failure propagates to the
++        // existing notification loop, which emits NotDelivered instead of Delivered.
++        return Err(AngelicAngelError::Webhook(status.as_u16()));
++    }
++    tracing::info!(status = %status, "webhook request succeeded");
+     Ok(())
+ }
+ 
+@@ -304,7 +293,7 @@
+         Some("aes128gcm") | None => {
+             tracing::debug!("decrypting with aes128gcm encoding");
+             let decrypted = ece::decrypt(&key_pair, &keys.auth_secret, encrypted).map_err(|e| {
+-                tracing::debug!(error = %e, "aes128gcm decryption error");
++                tracing::debug!("aes128gcm decryption error");
+                 AngelicAngelError::Decryption(format!("aes128gcm decryption failed: {}", e))
+             })?;
+ 
+@@ -352,7 +341,7 @@
+     .map_err(|e| AngelicAngelError::Decryption(format!("failed to construct AesGcmEncryptedBlock: {}", e)))?;
+ 
+     let decrypted = ece::legacy::decrypt_aesgcm(key_pair, auth_secret, &block).map_err(|e| {
+-        tracing::debug!(error = %e, "aesgcm decryption error");
++        tracing::debug!("aesgcm decryption error");
+         AngelicAngelError::Decryption(format!("aesgcm decryption failed: {}", e))
+     })?;
+ 
+@@ -380,3 +369,66 @@
+         param_name, header
+     )))
+ }
++
++#[cfg(test)]
++mod hardening_tests {
++    use super::*;
++    use tokio::io::{AsyncReadExt, AsyncWriteExt};
++
++    async fn response_server(response: String, delay: Duration) -> (String, tokio::task::JoinHandle<()>) {
++        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++        let address = listener.local_addr().unwrap();
++        let task = tokio::spawn(async move {
++            let (mut stream, _) = listener.accept().await.unwrap();
++            let mut bytes = vec![0u8; 4096];
++            let _ = stream.read(&mut bytes).await;
++            tokio::time::sleep(delay).await;
++            let _ = stream.write_all(response.as_bytes()).await;
++        });
++        (format!("http://{address}/synthetic_endpoint_marker"), task)
++    }
++
++    #[tokio::test]
++    async fn accepted_webhook_response_succeeds() {
++        let (url, task) = response_server("HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(), Duration::ZERO).await;
++        let result = send_to_webhook_with_client(&serde_json::json!({"test": "synthetic_payload"}), &url, &webhook_client(WEBHOOK_TIMEOUT).unwrap()).await;
++        task.await.unwrap();
++        assert!(result.is_ok());
++    }
++
++    #[tokio::test]
++    async fn rejected_webhook_response_is_failure_and_hides_body_and_endpoint() {
++        let body = "synthetic_response_body_marker";
++        let response = format!("HTTP/1.1 503 Unavailable\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
++        let (url, task) = response_server(response, Duration::ZERO).await;
++        let result = send_to_webhook_with_client(&serde_json::json!({"test": "synthetic_payload"}), &url, &webhook_client(WEBHOOK_TIMEOUT).unwrap()).await;
++        task.await.unwrap();
++        let error = result.unwrap_err();
++        assert!(matches!(error, AngelicAngelError::Webhook(503)));
++        let diagnostic = format!("{error} {error:?}");
++        assert!(!diagnostic.contains(body));
++        assert!(!diagnostic.contains("synthetic_endpoint_marker"));
++    }
++
++    #[tokio::test]
++    async fn webhook_redirect_is_failure_and_is_not_followed() {
++        let forbidden = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++        let location = format!("http://{}/forbidden", forbidden.local_addr().unwrap());
++        let response = format!("HTTP/1.1 307 Temporary Redirect\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
++        let (url, task) = response_server(response, Duration::ZERO).await;
++        let result = send_to_webhook_with_client(&serde_json::json!({"test": "synthetic_payload"}), &url, &webhook_client(WEBHOOK_TIMEOUT).unwrap()).await;
++        task.await.unwrap();
++        assert!(matches!(result, Err(AngelicAngelError::Webhook(307))));
++        assert!(tokio::time::timeout(Duration::from_millis(50), forbidden.accept()).await.is_err());
++    }
++
++    #[tokio::test]
++    async fn webhook_timeout_is_bounded_and_diagnostic_is_redacted() {
++        assert_eq!(WEBHOOK_TIMEOUT, Duration::from_secs(10));
++        let (url, task) = response_server("HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n".into(), Duration::from_millis(200)).await;
++        let result = send_to_webhook_with_client(&serde_json::json!({"test": "synthetic_payload"}), &url, &webhook_client(Duration::from_millis(50)).unwrap()).await;
++        let error = result.unwrap_err();
++        assert!(!format!("{error} {error:?}").contains("synthetic_endpoint_marker"));
++        task.await.unwrap();
++    }
++}
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -12,7 +12,7 @@
+ use cli::{Cli, Commands};
+ use config::Config;
+ use console::style;
+-use dialoguer::{Input, Password};
++use dialoguer::Password;
+ use error::Result;
+ use indicatif::ProgressBar;
+ use tracing_subscriber::EnvFilter;
+@@ -22,9 +22,9 @@
+     let cli = Cli::parse();
+ 
+     let filter = if cli.verbose {
+-        EnvFilter::new("debug")
++        EnvFilter::new("off,angelic_angel=debug")
+     } else {
+-        EnvFilter::new("warn")
++        EnvFilter::new("off,angelic_angel=warn")
+     };
+     tracing_subscriber::fmt().with_env_filter(filter).init();
+ 
+@@ -101,9 +101,9 @@
+ 
+     let ct0 = match arg_ct0 {
+         Some(v) => v,
+-        None => Input::new()
++        None => Password::new()
+             .with_prompt("ct0")
+-            .interact_text()
++            .interact()
+             .map_err(|e| error::AngelicAngelError::Config(format!("input error: {}", e)))?,
+     };
+ 
+@@ -167,7 +167,7 @@
+         )
+     })?;
+ 
+-    tracing::info!(config = %config_path.display(), "config loaded, starting listener");
++    tracing::info!("config loaded, starting listener");
+ 
+     listener::listen(registration, config_path).await?;
+ 
+@@ -181,26 +181,14 @@
+     match Config::load(config_path) {
+         Ok(config) => {
+             eprintln!("{}  {}", style("Config").cyan().bold(), style(config_path.display()).dim());
+-            eprintln!(
+-                "  auth_token  {}...",
+-                style(&config.twitter.auth_token.chars().take(20).collect::<String>()).dim()
+-            );
+-            eprintln!(
+-                "  ct0         {}...",
+-                style(&config.twitter.ct0.chars().take(20).collect::<String>()).dim()
+-            );
++            eprintln!("  X credentials configured (values hidden)");
+ 
+             eprintln!();
+ 
+             match config.registration {
+-                Some(reg) => {
++                Some(_) => {
+                     eprintln!("{}  {}", style("Registration").cyan().bold(), style("active").green());
+-                    eprintln!(
+-                        "  endpoint    {}...",
+-                        style(&reg.endpoint.chars().take(50).collect::<String>()).dim()
+-                    );
+-                    eprintln!("  uaid        {}", style(&reg.autopush.uaid).dim());
+-                    eprintln!("  channel_id  {}", style(&reg.autopush.channel_id).dim());
++                    eprintln!("  Push subscription configured (values hidden)");
+                 }
+                 None => {
+                     eprintln!(
+--- a/src/twitter.rs
++++ b/src/twitter.rs
+@@ -13,7 +13,12 @@
+     twitter_config: &TwitterConfig,
+     push_subscription: &PushSubscription,
+ ) -> Result<()> {
+-    let client = Client::new();
++    let client = Client::builder()
++        .timeout(std::time::Duration::from_secs(10))
++        .connect_timeout(std::time::Duration::from_secs(10))
++        .redirect(reqwest::redirect::Policy::none())
++        .no_proxy()
++        .build()?;
+     register_push_subscription(&client, twitter_config, push_subscription).await?;
+     Ok(())
+ }
+@@ -42,8 +47,7 @@
+         }
+     });
+ 
+-    tracing::debug!(url = %url, "sending push subscription request");
+-    tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap(), "request body");
++    tracing::debug!("sending push subscription request");
+ 
+     let response = client
+         .post(&url)
+@@ -68,17 +72,13 @@
+     tracing::debug!(status = %status, "response status");
+ 
+     if !response.status().is_success() {
+-        let error_text = response.text().await?;
+-        tracing::debug!(body = %error_text, "error response body");
+-
+         return Err(AngelicAngelError::TwitterApi(format!(
+-            "push subscription registration failed ({}): {}",
+-            status, error_text
++            "push subscription registration failed (HTTP {})",
++            status
+         )));
+     }
+ 
+-    let response_json: serde_json::Value = response.json().await?;
+-    tracing::debug!(body = %serde_json::to_string_pretty(&response_json).unwrap(), "success response body");
++    let _: serde_json::Value = response.json().await?;
+ 
+     Ok(())
+ }
+--- /dev/null
++++ b/tests/hardening_cli.rs
+@@ -0,0 +1,37 @@
++#[cfg(unix)]
++#[test]
++fn status_and_verbose_status_hide_cookie_and_subscription_values() {
++    use std::os::unix::fs::PermissionsExt;
++    let dir = std::env::temp_dir().canonicalize().unwrap().join(format!("angelic-hardening-cli-{}", uuid::Uuid::new_v4()));
++    std::fs::create_dir(&dir).unwrap();
++    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
++    let path = dir.join("config.toml");
++    let data = r#"[twitter]
++auth_token = "synthetic_cookie_marker"
++ct0 = "synthetic_csrf_marker"
++[registration]
++endpoint = "https://example.invalid/synthetic_subscription_marker"
++[registration.autopush]
++uaid = "synthetic_uaid_marker"
++channel_id = "synthetic_channel_marker"
++[registration.keys]
++public_key = [1]
++private_key = [2]
++auth_secret = [3]
++"#;
++    std::fs::write(&path, data).unwrap();
++    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
++    for verbose in [false, true] {
++        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_angelic-angel"));
++        command.arg("--config").arg(&path);
++        if verbose { command.arg("--verbose"); }
++        let output = command.arg("status").output().unwrap();
++        assert!(output.status.success());
++        let combined = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
++        assert!(combined.contains("values hidden"));
++        for marker in ["synthetic_cookie_marker", "synthetic_csrf_marker", "synthetic_subscription_marker", "synthetic_uaid_marker", "synthetic_channel_marker"] {
++            assert!(!combined.contains(marker));
++        }
++    }
++    std::fs::remove_dir_all(dir).unwrap();
++}

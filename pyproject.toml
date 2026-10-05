@@ -1,0 +1,10 @@
+[project]
+name = "postrelay"
+version = "0.1.0"
+description = "Self-hosted public-post notification delivery to Discord"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+dependencies = []
+
+[tool.postrelay]
+web-assets = "web"

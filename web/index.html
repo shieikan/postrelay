@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light"><title>Discordへの通知 — PostRelay</title>
+  <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div id="app"><div class="loading">PostRelayを読み込んでいます…</div></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <section id="feed-editor" hidden>
+    <form id="feed-form">
+      <div class="editor-route">
+        <div class="editor-field"><label for="feed-handle">Xのユーザー名</label><div class="input-with-prefix"><span aria-hidden="true">@</span><input id="feed-handle" name="handle" placeholder="example" pattern="@?[A-Za-z0-9_]{1,15}" maxlength="16" required autocomplete="off" aria-describedby="handle-help"></div><small id="handle-help">プロフィールにある @example の部分を入力してください。</small></div>
+        <span class="route-arrow" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12h18m-6-6 6 6-6 6"/></svg></span>
+        <div class="editor-field"><label for="feed-channel">チャンネル名（表示用）</label><div class="input-with-prefix"><span aria-hidden="true">#</span><input id="feed-channel" name="channel" placeholder="product-news" maxlength="80" required list="channel-options" aria-describedby="channel-help"></div><datalist id="channel-options"></datalist><small id="channel-help">一覧に表示する名前です。送信先は下のURLで指定します。</small></div>
+      </div>
+      <p class="editor-description">このアカウントの投稿通知を、指定したDiscordチャンネルへ届けます。</p>
+      <details class="form-details" id="destination-details" hidden>
+        <summary>Discordに送信するための設定</summary>
+        <div class="details-body"><label for="feed-webhook">Discordの送信先URL（Webhook）<input id="feed-webhook" name="webhook_url" type="password" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false" aria-describedby="webhook-help"><small id="webhook-help">Discordへ送信するには、このURLの設定が必要です。</small></label><p class="field-help">送信先はこのURLで指定します。チャンネル名を変更しても送信先は変わりません。<a href="https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks" target="_blank" rel="noopener noreferrer">DiscordでURLを取得する方法</a></p></div>
+      </details>
+      <details class="form-details" id="advanced-details">
+        <summary>通知する内容・メンション<span class="optional">任意</span></summary>
+        <div class="details-body"><div class="field-grid"><label>この言葉を含む通知だけ送る<input name="include" placeholder="リリース, 公開"><small>どれか1つを含めば対象になります。空欄ならキーワードで絞り込みません。</small></label><label>この言葉を含む通知は送らない<input name="exclude" placeholder="広告, PR"><small>どれか1つを含めば送りません。両方の条件に当てはまる場合、こちらを優先します。</small></label></div><p class="field-help" id="keyword-limit"></p><div class="checks"><label><input type="checkbox" name="include_replies">返信も通知する</label><label><input type="checkbox" name="include_reposts">リポストも通知する</label></div><small>接続したツールが返信・リポストの情報を送る場合に使えます。</small><label>メンションするロール<span class="optional">任意</span><input name="role_id" placeholder="空欄ならメンションなし" pattern="[0-9]*" maxlength="24"><small>DiscordのロールIDを入力してください。空欄ならメンションしません。</small></label></div>
+      </details>
+      <p id="form-error" class="error" role="alert" tabindex="-1"></p>
+      <div class="form-footer"><button type="button" id="cancel-editor" class="button danger">キャンセル</button><button type="submit" id="save-feed" class="button primary">追加する</button></div>
+    </form>
+  </section>
+  <dialog id="source-dialog" aria-labelledby="source-title" aria-describedby="source-description">
+    <div class="dialog-heading"><h2 id="source-title">受け取りURLを作成しますか？</h2></div>
+    <p id="source-description" class="confirmation-copy">すでにURLを作成している場合、以前のURLは使えなくなります。接続したツールに設定したURLも、新しいものに変更してください。</p>
+    <p id="source-error" class="error" role="alert"></p>
+    <div class="dialog-footer"><button type="button" id="cancel-source" class="button danger">キャンセル</button><button type="button" id="issue-source" class="button primary">URLを作成</button></div>
+  </dialog>
+</body>
+</html>
