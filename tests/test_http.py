@@ -70,13 +70,13 @@ class HTTPTests(unittest.TestCase):
         self.assertNotIn('source_hash', json.dumps(state))
         self.assertNotIn('password_hash', json.dumps(state))
 
-    def test_source_rotation_revokes_old_url_and_plan_cannot_be_escalated(self):
+    def test_source_rotation_revokes_old_url_and_removed_plan_route_is_unavailable(self):
         _, cookie = self.register('user@example.test')
         _, old, _ = self.request('/api/source/rotate', {}, cookie)
         self.request('/api/source/rotate', {}, cookie)
         payload = {'id': '10', 'author': 'example', 'text': 'test', 'url': 'https://x.com/example/status/10'}
         self.assertEqual(self.request(old['url'][len(self.base):], payload)[0], 401)
-        self.assertEqual(self.request('/api/plan', {'plan': 'pro'}, cookie)[0], 403)
+        self.assertEqual(self.request('/api/plan', {'plan': 'pro'}, cookie)[0], 404)
 
 
 if __name__ == '__main__':

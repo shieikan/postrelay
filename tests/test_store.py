@@ -9,8 +9,8 @@ class StoreTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.path = Path(self.temp.name) / 'data.sqlite'
         self.store = Store(self.path)
-        self.owner = self.store.create_user('one@example.test', 'a long synthetic password', 'starter')
-        self.other = self.store.create_user('two@example.test', 'a long synthetic password', 'starter')
+        self.owner = self.store.create_user('one@example.test', 'a long synthetic password')
+        self.other = self.store.create_user('two@example.test', 'a long synthetic password')
         self.feed = self.store.create_feed(self.owner['id'], {'handle': 'example', 'channel': 'news'})
         self.post = {'id': '123', 'author': 'example', 'text': 'new release',
                      'url': 'https://x.com/example/status/123', 'kind': 'post', 'visibility': 'public'}
@@ -53,12 +53,18 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(len([job for job in jobs if job['feed_id'] == self.feed['id']]), 1)
         self.assertEqual(self.store.list_jobs(self.other['id']), [])
 
-    def test_plan_limits_and_keyword_caps_are_server_side(self):
-        with self.assertRaises(ValueError):
-            self.store.create_feed(self.owner['id'], {'handle': 'a', 'channel': 'b',
-                                                     'include': [str(i) for i in range(21)]})
-        for index in range(99):
-            self.store.create_feed(self.owner['id'], {'handle': f'user{index}', 'channel': 'news'})
+    def test_technical_limits_are_server_side_and_equal_for_all_users(self):
+        for owner in [self.owner, self.other]:
+            self.store.create_feed(owner['id'], {'handle': 'manywords', 'channel': 'news',
+                                               'include': [str(i) for i in range(100)]})
+            with self.assertRaises(ValueError):
+                self.store.create_feed(owner['id'], {'handle': 'overflow', 'channel': 'news',
+                                                    'include': [str(i) for i in range(101)]})
+        with self.store.connection() as db:
+            row = db.execute('SELECT config FROM feeds WHERE id=?', (self.feed['id'],)).fetchone()
+            count = db.execute('SELECT COUNT(*) FROM feeds WHERE user_id=?', (self.owner['id'],)).fetchone()[0]
+            db.executemany('INSERT INTO feeds(id,user_id,config,enabled) VALUES(?,?,?,1)',
+                           [(f'synthetic-{i}', self.owner['id'], row['config']) for i in range(2000-count)])
         with self.assertRaises(ValueError):
             self.store.create_feed(self.owner['id'], {'handle': 'overflow', 'channel': 'news'})
 

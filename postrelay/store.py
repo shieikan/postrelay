@@ -8,11 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from .security import digest_token, hash_password, verify_password, validate_feed, validate_mapping, matches_feed
 
-PLANS = {
-    'starter': {'name': 'Starter', 'price': '1.49', 'feeds': 100, 'keywords': 20},
-    'pro': {'name': 'Pro', 'price': '4.99', 'feeds': 400, 'keywords': None},
-    'selfhost': {'name': 'Self-host', 'price': '0', 'feeds': None, 'keywords': None},
-}
+LIMITS = {'feeds': 2000, 'keywords': 100}
 
 
 class Store:
@@ -54,6 +50,8 @@ class Store:
                 db.execute('ALTER TABLE feeds ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1')
                 for row in db.execute('SELECT id,config FROM feeds').fetchall():
                     db.execute('UPDATE feeds SET enabled=? WHERE id=?', (int(json.loads(row['config'])['enabled']), row['id']))
+            # Keep the legacy column for old databases, without commercial tiers.
+            db.execute("UPDATE users SET plan='selfhost' WHERE plan<>'selfhost'")
         os.chmod(self.path, 0o600)
 
     @contextmanager
@@ -69,19 +67,17 @@ class Store:
 
     @staticmethod
     def public_user(row):
-        return {'id': row['id'], 'email': row['email'], 'plan': row['plan'], 'mapping': json.loads(row['mapping'])}
+        return {'id': row['id'], 'email': row['email'], 'mapping': json.loads(row['mapping'])}
 
-    def create_user(self, email, password, plan='selfhost'):
+    def create_user(self, email, password):
         if not isinstance(email, str) or len(email) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
             raise ValueError('メールアドレスを確認してください。')
-        if plan not in PLANS:
-            raise ValueError('プランが不正です。')
         password_hash = hash_password(password)
         user_id, source = secrets.token_hex(16), secrets.token_urlsafe(32)
         try:
             with self.connection() as db:
                 db.execute('INSERT INTO users(id,email,password_hash,plan,source_hash) VALUES(?,?,?,?,?)',
-                           (user_id, email.strip().lower(), password_hash, plan, digest_token(source)))
+                           (user_id, email.strip().lower(), password_hash, 'selfhost', digest_token(source)))
         except sqlite3.IntegrityError:
             raise ValueError('このメールアドレスでは登録できません。')
         return dict(self.get_user(user_id), source_token=source)
@@ -157,19 +153,6 @@ class Store:
                        '(SELECT id FROM push_inbox WHERE user_id=? ORDER BY received DESC,rowid DESC LIMIT 20)',
                        (user_id, user_id))
 
-    def set_plan(self, user_id, plan):
-        if plan not in PLANS:
-            raise ValueError('プランが不正です。')
-        limits = PLANS[plan]
-        feeds = self.list_feeds(user_id)
-        if limits['feeds'] is not None and len(feeds) > limits['feeds']:
-            raise ValueError(f'通知設定が{len(feeds)}件あるため、このプランの上限{limits["feeds"]}件を超えています。別のプランを選んでください。')
-        for feed in feeds:
-            if limits['keywords'] is not None and len(feed['include']) + len(feed['exclude']) > limits['keywords']:
-                raise ValueError(f'@{feed["handle"]}のキーワードが{len(feed["include"]) + len(feed["exclude"])}個あるため、このプランの上限{limits["keywords"]}個を超えています。キーワードを減らすか、別のプランを選んでください。')
-        with self.connection() as db:
-            db.execute('UPDATE users SET plan=? WHERE id=?', (plan, user_id))
-
     @staticmethod
     def public_feed(row):
         config = json.loads(row['config'])
@@ -184,16 +167,13 @@ class Store:
     def create_feed(self, user_id, data):
         with self.connection() as db:
             db.execute('BEGIN IMMEDIATE')
-            user = db.execute('SELECT plan FROM users WHERE id=?', (user_id,)).fetchone()
+            user = db.execute('SELECT id FROM users WHERE id=?', (user_id,)).fetchone()
             if not user:
                 raise KeyError('アカウントが見つかりません。')
-            limits = PLANS[user['plan']]
-            config = validate_feed(data, limits['keywords'])
+            config = validate_feed(data, LIMITS['keywords'])
             count = db.execute('SELECT COUNT(*) FROM feeds WHERE user_id=?', (user_id,)).fetchone()[0]
-            if limits['feeds'] is not None and count >= limits['feeds']:
-                raise ValueError(f'このプランで追加できる通知設定は{limits["feeds"]}件までです（現在{count}件）。')
-            if count >= 2000:
-                raise ValueError(f'通知設定は最大2000件まで追加できます（現在{count}件）。')
+            if count >= LIMITS['feeds']:
+                raise ValueError(f'処理量を抑えるため、通知設定は最大2000件までです（現在{count}件）。不要な設定を削除してから追加してください。')
             feed_id = secrets.token_hex(12)
             db.execute('INSERT INTO feeds(id,user_id,config,enabled) VALUES(?,?,?,?)', (feed_id, user_id, json.dumps(config), int(config['enabled'])))
             return self.public_feed({'id': feed_id, 'config': json.dumps(config)})
@@ -210,8 +190,7 @@ class Store:
                 raise KeyError('この通知設定が見つかりません。通知一覧から選び直してください。')
             config = json.loads(row['config'])
             config.update(changes)
-            plan = db.execute('SELECT plan FROM users WHERE id=?', (user_id,)).fetchone()[0]
-            config = validate_feed(config, PLANS[plan]['keywords'])
+            config = validate_feed(config, LIMITS['keywords'])
             db.execute('UPDATE feeds SET config=?,enabled=? WHERE id=? AND user_id=?', (json.dumps(config), int(config['enabled']), feed_id, user_id))
             return self.public_feed({'id': feed_id, 'config': json.dumps(config)})
 

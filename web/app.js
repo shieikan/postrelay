@@ -3,10 +3,10 @@ const app = document.querySelector('#app');
 const editor = document.querySelector('#feed-editor');
 const form = document.querySelector('#feed-form');
 const sourceDialog = document.querySelector('#source-dialog');
-const icons = {"home":"<path d=\"M5 12l-2 0l9 -9l9 9l-2 0\" /><path d=\"M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7\" /><path d=\"M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6\" />","adjustments-horizontal":"<path d=\"M12 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0\" /><path d=\"M4 6l8 0\" /><path d=\"M16 6l4 0\" /><path d=\"M6 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0\" /><path d=\"M4 12l2 0\" /><path d=\"M10 12l10 0\" /><path d=\"M15 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0\" /><path d=\"M4 18l11 0\" /><path d=\"M19 18l1 0\" />","history":"<path d=\"M12 8l0 4l2 2\" /><path d=\"M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5\" />","plug":"<path d=\"M9.785 6l8.215 8.215l-2.054 2.054a5.81 5.81 0 1 1 -8.215 -8.215l2.054 -2.054\" /><path d=\"M4 20l3.5 -3.5\" /><path d=\"M15 4l-3.5 3.5\" /><path d=\"M20 9l-3.5 3.5\" />","credit-card":"<path d=\"M3 8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3l0 -8\" /><path d=\"M3 10l18 0\" /><path d=\"M7 15l.01 0\" /><path d=\"M11 15l2 0\" />","search":"<path d=\"M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0\" /><path d=\"M21 21l-6 -6\" />","plus":"<path d=\"M12 5l0 14\" /><path d=\"M5 12l14 0\" />","arrow-right":"<path d=\"M5 12l14 0\" /><path d=\"M13 18l6 -6\" /><path d=\"M13 6l6 6\" />","arrow-up-right":"<path d=\"M17 7l-10 10\" /><path d=\"M8 7l9 0l0 9\" />","chevron-down":"<path d=\"M6 9l6 6l6 -6\" />","logout":"<path d=\"M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2\" /><path d=\"M9 12h12l-3 -3\" /><path d=\"M18 15l3 -3\" />","x":"<path d=\"M18 6l-12 12\" /><path d=\"M6 6l12 12\" />","check":"<path d=\"M5 12l5 5l10 -10\" />","player-pause":"<path d=\"M6 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12\" /><path d=\"M14 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12\" />","player-play":"<path d=\"M7 4v16l13 -8l-13 -8\" />","circle-check":"<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0\" /><path d=\"M9 12l2 2l4 -4\" />","alert-circle":"<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 8v4\" /><path d=\"M12 16h.01\" />","bell":"<path d=\"M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6\" /><path d=\"M9 17v1a3 3 0 0 0 6 0v-1\" />","copy":"<path d=\"M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666\" /><path d=\"M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1\" />","refresh":"<path d=\"M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4\" /><path d=\"M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4\" />","brand-discord":"<path d=\"M8 12a1 1 0 1 0 2 0a1 1 0 0 0 -2 0\" /><path d=\"M14 12a1 1 0 1 0 2 0a1 1 0 0 0 -2 0\" /><path d=\"M15.5 17c0 1 1.5 3 2 3c1.5 0 2.833 -1.667 3.5 -3c.667 -1.667 .5 -5.833 -1.5 -11.5c-1.457 -1.015 -3 -1.34 -4.5 -1.5l-.972 1.923a11.913 11.913 0 0 0 -4.053 0l-.975 -1.923c-1.5 .16 -3.043 .485 -4.5 1.5c-2 5.667 -2.167 9.833 -1.5 11.5c.667 1.333 2 3 3.5 3c.5 0 2 -2 2 -3\" /><path d=\"M7 16.5c3.5 1 6.5 1 10 0\" />","external-link":"<path d=\"M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6\" /><path d=\"M11 13l9 -9\" /><path d=\"M15 4h5v5\" />","filter":"<path d=\"M4 4h16v2.172a2 2 0 0 1 -.586 1.414l-4.414 4.414v7l-6 2v-8.5l-4.48 -4.928a2 2 0 0 1 -.52 -1.345v-2.227\" />","chevron-right":"<path d=\"M9 6l6 6l-6 6\" />","info-circle":"<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 9h.01\" /><path d=\"M11 12h1v4h1\" />","arrow-narrow-right":"<path d=\"M5 12l14 0\" /><path d=\"M15 16l4 -4\" /><path d=\"M15 8l4 4\" />"};
+const icons = {"home":"<path d=\"M5 12l-2 0l9 -9l9 9l-2 0\" /><path d=\"M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7\" /><path d=\"M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6\" />","adjustments-horizontal":"<path d=\"M12 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0\" /><path d=\"M4 6l8 0\" /><path d=\"M16 6l4 0\" /><path d=\"M6 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0\" /><path d=\"M4 12l2 0\" /><path d=\"M10 12l10 0\" /><path d=\"M15 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0\" /><path d=\"M4 18l11 0\" /><path d=\"M19 18l1 0\" />","history":"<path d=\"M12 8l0 4l2 2\" /><path d=\"M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5\" />","plug":"<path d=\"M9.785 6l8.215 8.215l-2.054 2.054a5.81 5.81 0 1 1 -8.215 -8.215l2.054 -2.054\" /><path d=\"M4 20l3.5 -3.5\" /><path d=\"M15 4l-3.5 3.5\" /><path d=\"M20 9l-3.5 3.5\" />","search":"<path d=\"M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0\" /><path d=\"M21 21l-6 -6\" />","plus":"<path d=\"M12 5l0 14\" /><path d=\"M5 12l14 0\" />","arrow-right":"<path d=\"M5 12l14 0\" /><path d=\"M13 18l6 -6\" /><path d=\"M13 6l6 6\" />","arrow-up-right":"<path d=\"M17 7l-10 10\" /><path d=\"M8 7l9 0l0 9\" />","chevron-down":"<path d=\"M6 9l6 6l6 -6\" />","logout":"<path d=\"M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2\" /><path d=\"M9 12h12l-3 -3\" /><path d=\"M18 15l3 -3\" />","x":"<path d=\"M18 6l-12 12\" /><path d=\"M6 6l12 12\" />","check":"<path d=\"M5 12l5 5l10 -10\" />","player-pause":"<path d=\"M6 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12\" /><path d=\"M14 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12\" />","player-play":"<path d=\"M7 4v16l13 -8l-13 -8\" />","circle-check":"<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0\" /><path d=\"M9 12l2 2l4 -4\" />","alert-circle":"<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 8v4\" /><path d=\"M12 16h.01\" />","bell":"<path d=\"M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6\" /><path d=\"M9 17v1a3 3 0 0 0 6 0v-1\" />","copy":"<path d=\"M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666\" /><path d=\"M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1\" />","refresh":"<path d=\"M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4\" /><path d=\"M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4\" />","brand-discord":"<path d=\"M8 12a1 1 0 1 0 2 0a1 1 0 0 0 -2 0\" /><path d=\"M14 12a1 1 0 1 0 2 0a1 1 0 0 0 -2 0\" /><path d=\"M15.5 17c0 1 1.5 3 2 3c1.5 0 2.833 -1.667 3.5 -3c.667 -1.667 .5 -5.833 -1.5 -11.5c-1.457 -1.015 -3 -1.34 -4.5 -1.5l-.972 1.923a11.913 11.913 0 0 0 -4.053 0l-.975 -1.923c-1.5 .16 -3.043 .485 -4.5 1.5c-2 5.667 -2.167 9.833 -1.5 11.5c.667 1.333 2 3 3.5 3c.5 0 2 -2 2 -3\" /><path d=\"M7 16.5c3.5 1 6.5 1 10 0\" />","external-link":"<path d=\"M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6\" /><path d=\"M11 13l9 -9\" /><path d=\"M15 4h5v5\" />","filter":"<path d=\"M4 4h16v2.172a2 2 0 0 1 -.586 1.414l-4.414 4.414v7l-6 2v-8.5l-4.48 -4.928a2 2 0 0 1 -.52 -1.345v-2.227\" />","chevron-right":"<path d=\"M9 6l6 6l-6 6\" />","info-circle":"<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 9h.01\" /><path d=\"M11 12h1v4h1\" />","arrow-narrow-right":"<path d=\"M5 12l14 0\" /><path d=\"M15 16l4 -4\" /><path d=\"M15 8l4 4\" />"};
 const icon = name => `<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>${icons[name] || ''}</svg>`;
 
-const titles = {feeds:'Discordへの通知', editor:'通知するアカウントを追加', history:'送信履歴', source:'設定', plans:'料金とプラン'};
+const titles = {feeds:'Discordへの通知', editor:'通知するアカウントを追加', history:'送信履歴', source:'設定'};
 const labels = {simulated:'送信なし（動作確認）', delivered:'送信済み', queued:'送信待ち', sending:'送信中', retry:'再試行待ち', failed:'送信失敗'};
 let state, bootstrap, current='feeds', search='', historyFilter='all', historyFeed='', editing=null, receiverUrl='', timer, settingsSection='', editorReturn='feeds', feedOpener='[data-add]';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -31,6 +31,7 @@ function readRoute() {
   const [view,query='']=location.hash.slice(1).split('?');
   const params=new URLSearchParams(query);
   current=Object.hasOwn ? (Object.hasOwn(titles,view) ? view : 'feeds') : (Object.prototype.hasOwnProperty.call(titles,view) ? view : 'feeds');
+  if(current!==view) history.replaceState(null,'','#'+current);
   historyFeed=params.get('feed') || ''; settingsSection=params.get('section') || '';
   editing=current==='editor' ? state?.feeds.find(f=>f.id===params.get('id')) || null : null;
 }
@@ -116,8 +117,8 @@ function hydrateEditor() {
   document.querySelector('#channel-help').textContent=state.mode==='demo' ? '一覧に表示する名前です。デモでは実際のチャンネルには接続しません。' : '一覧に表示する名前です。送信先は下のURLで指定します。';
   document.querySelector('.editor-description').textContent=state.mode==='demo' ? 'デモではサンプル通知で試せます。Discordへの送信はありません。' : '接続したツールから届く、このアカウントの投稿通知をDiscordへ届けます。';
   document.querySelector('#webhook-help').textContent=editing?.webhook_configured ? '送信先URLは設定済みです。変更する場合だけ入力してください。' : 'Discordへ送信するには、このURLの設定が必要です。';
-  const limit=state.plans[state.user.plan].keywords || 100;
-  document.querySelector('#keyword-limit').textContent=`2つの欄を合わせて${limit}個まで。複数の言葉はカンマで区切ってください。`;
+  const limit=state.limits.keywords;
+  document.querySelector('#keyword-limit').textContent=`処理量を抑えるため、2つの欄を合わせて${limit}個まで設定できます。複数の言葉はカンマで区切ってください。`;
   slot.append(editor);editor.hidden=false;
 }
 function openFeed(feed=null) {
@@ -158,7 +159,7 @@ function sourceView() {
         <div class='receiver-row'>${receiverUrl ? `<code id='receiver-url'>${esc(receiverUrl)}</code>${button('URLをコピー',"id='copy-source'",'secondary','copy')}` : '<p class=receiver-placeholder>受け取りURLを作成すると、ここに表示されます。</p>'}</div>
         ${button(receiverUrl ? '受け取りURLを作り直す' : '受け取りURLを作成',"id='rotate-source'",receiverUrl ? 'secondary' : 'primary')}
         <p class='field-help'>このURLは第三者に共有しないでください。作り直すと、以前のURLでは通知を受け取れなくなります。</p>
-        <details class='simple-details compact'><summary>Angelic-Angelの設定方法</summary><p><code>WEBHOOK_ENDPOINT</code>にPostRelayの受け取りURLを設定します。通知データの項目名が異なる場合は、下の「連携ツールの詳細設定」で指定してください。</p></details>
+        <details class='simple-details compact'><summary>Angelic-Angelの設定方法</summary><p>Docker構成では、サーバーで接続設定を開き、この受け取りURLを入力します。手順はリポジトリのサーバー起動ガイドを確認してください。通知するXアカウントは、接続元のXアカウントでフォローし、投稿通知をオンにする必要があります。</p></details>
       </div></details>
       <div class='connection-row'><h2 class='service-name'>Discord</h2><p class='service-copy'>Discordに送信する</p><span class='service-state status paused'>${configured ? `送信先URLを${configured}件設定済み` : '送信先URLが未設定'}</span>${button('Discordの送信先を設定',"data-expand='discord-connection'",'primary')}</div>
       <details class='connection-detail' id='discord-connection'><summary>アカウントごとの送信先</summary><div class='details-body'>
@@ -168,7 +169,7 @@ function sourceView() {
     </section>
     <details class='form-details advanced-connection' id='mapping-details'><summary>連携ツールの詳細設定</summary><div class='details-body'><p>接続したツールの説明に従い、通知データの項目名を指定してください。</p><form id='mapping-form'><div class='mapping-grid'>${[['id','投稿ID'],['author','Xのユーザー名'],['text','通知本文'],['url','投稿URL'],['kind','投稿種別（任意）'],['visibility','公開範囲（任意）']].map(([key,label])=>`<label>${label}<input name='${key}' value='${esc(map[key] || (key==='kind' || key==='visibility' ? '' : key))}' ${['id','author','text','url'].includes(key) ? 'required' : ''}></label>`).join('')}</div><p class='field-help'>入れ子の項目はnotification.bodyのように指定します。投稿種別はpost / reply / repost、公開範囲はpublicです。</p>${button('連携設定を保存',"type='submit'")}</form></div></details>
     <details class='simple-details'><summary>届けられる通知の範囲</summary><p>接続したツールから届いた公開投稿の通知を扱います。ツールから届かない投稿や、通知に含まれない本文・画像は届けられません。</p></details>
-    <div class='settings-links'><button class='text-button' data-go='history'>すべての送信履歴</button><button class='text-button' data-go='plans'>料金とプラン</button><button class='text-button' data-logout>ログアウト</button></div>`;
+    <div class='settings-links'><button class='text-button' data-go='history'>すべての送信履歴</button><button class='text-button' data-logout>ログアウト</button></div>`;
 }
 function renderApp() {
   shell();renderView();
@@ -176,7 +177,7 @@ function renderApp() {
 function renderView() {
   document.title=`${current==='editor' && editing ? '通知先と条件を編集' : titles[current]} — PostRelay`;
   const view=document.querySelector('#view');
-  view.innerHTML=({feeds:feedsView,editor:editorView,history:historyView,source:sourceView,plans:plansView})[current]();
+  view.innerHTML=({feeds:feedsView,editor:editorView,history:historyView,source:sourceView})[current]();
   if(current==='editor') hydrateEditor();
   if(current==='source' && ['x','discord'].includes(settingsSection)) document.querySelector('#'+settingsSection+'-connection').open=true;
   bindView();
@@ -226,11 +227,6 @@ function bindView() {
   document.querySelectorAll('[data-expand]').forEach(el=>el.onclick=()=>{
     const details=document.getElementById(el.dataset.expand);details.open=true;
     details.querySelector('summary').focus({preventScroll:true});details.scrollIntoView({behavior:'smooth',block:'nearest'});
-  });
-  document.querySelectorAll('[data-plan]').forEach(el=>el.onclick=async()=>{
-    el.disabled=true;
-    try {await api('/api/plan',{plan:el.dataset.plan});await updateAfterAction('デモ内の利用上限を切り替えました。');}
-    catch(error) {toast(error.message);}finally {el.disabled=false;}
   });
   document.querySelector('#sample-notification')?.addEventListener('click',async event=>{
     const el=event.currentTarget;el.disabled=true;
@@ -310,13 +306,6 @@ function loginScreen(register=false) {
   });
 }
 
-function plansView() {
-  const plan=state.user.plan;
-  const common=['キーワードで絞り込み','送信履歴','失敗した通知の再送'];
-  const features={selfhost:['通知設定2000件まで',...common],starter:['通知設定100件まで','通知設定1件につき、キーワード20個まで',...common],pro:['通知設定400件まで','通知設定1件につき、キーワード100個まで',...common]};
-  return heading('料金とプラン','自分のサーバーで使う場合、ソフトウェアは無料です。有料ホスティングは提供準備中です。')+`<div class='pricing-grid'>${[['selfhost','自分のサーバーで使う','セルフホスト'],['starter','Starter','小さなコミュニティに'],['pro','Pro','複数の通知先をまとめて']].map(([key,name,desc])=>`<section class='price-card ${key===plan ? 'selected' : ''}'><div class='price-card-heading'><h2>${name}</h2><span class='status ${key==='selfhost' ? 'enabled' : 'paused'}'>${key==='selfhost' ? 'ソフトウェア無料' : '提供準備中'}</span></div><p class='muted'>${desc}</p><div class='price'>$${state.plans[key].price}${key==='selfhost' ? '' : '<span> / 月</span>'}</div><p class='price-note'>${key==='selfhost' ? 'サーバーの運用費は自己負担です。' : '提供開始前の予定価格です。'}</p><ul>${features[key].map(item=>`<li>${icon('check')}${item}</li>`).join('')}</ul>${state.mode==='demo' ? button(key===plan ? 'この上限で試用中' : 'このプランの上限で試す',`data-plan='${key}' ${key===plan ? 'disabled' : ''}`,'secondary') : button(key==='selfhost' ? '利用中' : '提供準備中','disabled','secondary')}</section>`).join('')}</div><div class='plan-note'>${icon('info-circle')}<span>${state.mode==='demo' ? 'デモ内の上限だけを切り替えます。申込・支払いはありません。' : '有料ホスティングの申込・支払いはまだ提供していません。'}</span></div><details class='simple-details'><summary>利用方法について${icon('chevron-down')}</summary><p>自分のサーバーで使う場合は、運用・保守をご自身で行います。有料ホスティングでは、サーバーの用意・運用をお任せいただける予定です。PostRelayの全コードはMITライセンスで利用できます。</p></details>`;
-}
-
 // Presentation enhancements are kept separate from route and form state.
 (() => {
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -329,7 +318,6 @@ function plansView() {
     ['editor', '通知設定を追加', '追加', 'plus'],
     ['history', '送信履歴', '履歴', 'history'],
     ['source', '設定', '設定', 'plug'],
-    ['plans', '料金とプラン', '料金', 'credit-card'],
   ];
 
   function releaseViewportRoom() {

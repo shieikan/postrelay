@@ -9,7 +9,7 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
-from .store import PLANS
+from .store import LIMITS
 from .security import normalize_notification
 from .engine import Worker
 from .webpush import normalize_web_push, PushUnavailable
@@ -35,7 +35,7 @@ class App:
         if row:
             self.demo_user = row['id']
             return
-        user = self.store.create_user('demo@example.test', secrets.token_urlsafe(32), 'starter')
+        user = self.store.create_user('demo@example.test', secrets.token_urlsafe(32))
         self.demo_user = user['id']
         samples = [
             ('demo_studio', 'product-news', ['リリース', '公開'], []),
@@ -77,7 +77,7 @@ def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, pub
         raise ValueError('デモではDiscordへ送信できません。')
     if (capture_push or relay_web_push) and (mode != 'selfhost' or host != '127.0.0.1'
                          or (public_url and urlsplit(public_url).hostname not in {'127.0.0.1', 'localhost'})):
-        raise ValueError('実通知の形式確認は、このMac内のセルフホスト環境だけで利用できます。')
+        raise ValueError('X通知の受信は、セルフホストのループバック接続だけで利用できます。')
     app = App(store, mode, live, public_url, signup_key)
 
     class Handler(BaseHTTPRequestHandler):
@@ -153,14 +153,14 @@ def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, pub
                 return self.json(403, {'error': 'アクセス元を確認してください。'})
             path = urlsplit(self.path).path
             if path == '/api/bootstrap':
-                return self.json(200, dict(mode=app.mode, live=app.live, plans=PLANS, user=self.user(), billing=False))
+                return self.json(200, dict(mode=app.mode, live=app.live, limits=LIMITS, user=self.user()))
             if path == '/api/state':
                 user = self.user()
                 if not user:
                     return self.json(401, {'error': 'ログインしてください。'})
                 return self.json(200, dict(user=user, feeds=app.store.list_feeds(user['id']),
                      jobs=app.store.list_jobs(user['id']), stats=app.store.stats(user['id']),
-                     mode=app.mode, live=app.live, billing=False, plans=PLANS))
+                     mode=app.mode, live=app.live, limits=LIMITS))
             static = {'/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'),
                       '/style.css': ('style.css', 'text/css'), '/favicon.svg': ('favicon.svg', 'image/svg+xml')}
             if path not in static:
@@ -256,11 +256,6 @@ def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, pub
                 if path == '/api/source/mapping':
                     app.store.set_mapping(user_id, data.get('mapping'))
                     return self.json(200, {'ok': True})
-                if path == '/api/plan':
-                    if app.mode != 'demo':
-                        return self.json(403, {'error': 'セルフホスト版に有料プランの切替はありません。'})
-                    app.store.set_plan(user_id, data.get('plan'))
-                    return self.json(200, {'ok': True, 'simulated': True})
                 if path.startswith('/api/jobs/') and path.endswith('/retry'):
                     job_id = path[len('/api/jobs/'):-len('/retry')]
                     app.store.retry_job(user_id, job_id)

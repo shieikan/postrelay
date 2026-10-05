@@ -117,7 +117,7 @@ def validate_feed(data, keyword_limit=None):
     if total_keywords > 100:
         raise ValueError(f'キーワードが{total_keywords}個あります。2つの欄を合わせて100個以内にしてください。')
     if keyword_limit is not None and total_keywords > keyword_limit:
-        raise ValueError(f'キーワードが{total_keywords}個あるため、このプランの上限{keyword_limit}個を超えています。2つの欄を合わせて{keyword_limit}個以内にしてください。')
+        raise ValueError(f'キーワードが{total_keywords}個あります。2つの欄を合わせて{keyword_limit}個以内にしてください。')
     webhook = data.get('webhook_url', '')
     if not isinstance(webhook, str):
         raise ValueError('Discordの送信先URLは文字列で指定してください。')

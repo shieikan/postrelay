@@ -2,6 +2,8 @@
 
 Source: [sh1ma/Angelic-Angel](https://github.com/sh1ma/Angelic-Angel), commit `169a098e2025cc6e41a50fc8d521c483e21d9b6d` (2026-03-05). `angelic-hardening.patch` is a local MIT-licensed patch against that exact archive; it is not an upstream release.
 
+The optional Compose source container builds this pinned upstream with the patch applied. Interactive setup, private storage and server startup are documented in the [server guide](../docs/server.md). The Dockerfile verifies the downloaded archive's SHA-256 before building; PostRelay and Angelic-Angel run as separate processes.
+
 Apply inside a clean checkout of the pinned commit, using the actual path to this directory:
 
 ```sh

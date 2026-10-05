@@ -203,7 +203,6 @@ small a { display: inline-block; margin-top: 4px; }
 .service-state { justify-self: start; max-width: 100%; white-space: normal; text-align: center; }
 .connection-row > .button, .connection-row > .text-button { justify-self: end; }
 .connection-row > .button { max-width: 100%; white-space: normal; text-align: center; }
-.price-card-heading { flex-wrap: wrap; gap: 10px; }
 .connection-detail { border-bottom: 1px solid var(--line); }
 .connection-detail:not([open]) { display: none; }
 .connection-detail > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 49px; padding: 12px 0; color: var(--muted); font-size: 13px; }
@@ -232,23 +231,6 @@ small a { display: inline-block; margin-top: 4px; }
 .advanced-connection .details-body > p { margin: 10px 0; color: var(--muted); font-size: 13px; }
 .settings-links { display: flex; align-items: center; flex-wrap: wrap; gap: 26px; margin-top: 35px; padding-top: 19px; border-top: 1px solid var(--line); }
 .settings-links .text-button { text-decoration: underline; text-underline-offset: 4px; }
-.pricing-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0; margin-top: 35px; border-top: 1px solid #bcc3cd; }
-.price-card { min-width: 0; margin-top: 26px; padding: 0 29px 16px; border-left: 1px solid var(--line); background: transparent; }
-.price-card:first-child { padding-left: 0; border-left: 0; }
-.price-card:last-child { padding-right: 0; }
-.price-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.price-card h2 { font-family: var(--serif); font-size: 24px; font-weight: 600; }
-.price-card.selected h2 { color: var(--accent); }
-.price-card > .muted { margin-top: 12px; font-size: 13px; }
-.price { margin-top: 22px; font-family: Georgia, serif; font-size: 42px; font-weight: 600; letter-spacing: -1.1px; line-height: 1.35; }
-.price > span { color: var(--muted); font-family: inherit; font-size: 13px; font-weight: 400; letter-spacing: 0; }
-.price-note { min-height: 43px; margin-top: 10px; color: var(--muted); font-size: 12px; line-height: 1.85; }
-.price-card ul { display: flex; flex-direction: column; gap: 13px; padding: 0; margin: 25px 0 27px; list-style: none; font-size: 13px; }
-.price-card li { display: flex; align-items: flex-start; gap: 8px; }
-.price-card li .icon { width: 15px; height: 15px; margin-top: 3px; color: var(--muted); }
-.price-card .button { width: 100%; }
-.plan-note { display: flex; align-items: flex-start; gap: 8px; margin: 25px 0; color: var(--muted); font-size: 12px; }
-.plan-note .icon { width: 16px; height: 16px; margin-top: 2px; }
 .simple-details { padding: 5px 0; margin-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .simple-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 45px; color: var(--muted); font-weight: 550; }
 .simple-details p { margin: 6px 0 15px; line-height: 1.85; }
@@ -313,11 +295,6 @@ dialog::backdrop { background: #252d3955; }
   .connection-row > .button, .connection-row > .text-button { grid-column: 2 / 4; justify-self: start; }
   .notification { grid-template-columns: 70px minmax(0,1fr) 108px; gap: 18px; }
   .editor-route { gap: 18px; grid-template-columns: minmax(0,1fr) 38px minmax(0,1fr); }
-  .pricing-grid { grid-template-columns: 1fr; }
-  .price-card, .price-card:first-child, .price-card:last-child { padding: 24px 0 29px; margin: 0; border-left: 0; border-bottom: 1px solid var(--line); }
-  .price-note { min-height: 0; }
-  .price-card .button { width: auto; min-width: 185px; }
-  .price-card ul { gap: 10px; margin: 20px 0 24px; }
   .login-layout { gap: 40px; width: calc(100% - 48px); }
   .login-intro h1 { font-size: 38px; }
 }
@@ -396,9 +373,6 @@ dialog::backdrop { background: #252d3955; }
   .receiver-row code { font-size: 11px; }
   .settings-links { gap: 16px 24px; margin-top: 28px; padding-top: 16px; }
   .settings-links .text-button { font-size: 13px; }
-  .price-card h2 { font-size: 23px; }
-  .price { font-size: 39px; }
-  .price-card .button { min-width: 180px; }
   dialog { max-height: calc(100dvh - 32px); padding: 22px; }
   .dialog-heading h2 { font-size: 24px; }
   .dialog-footer { gap: 10px; }
@@ -489,7 +463,7 @@ details[data-expanded='false'] > summary > .icon:last-child { transform: rotate(
     inset: auto 0 0;
     z-index: 20;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
     padding: 7px 16px calc(7px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--line);
