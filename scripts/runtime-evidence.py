@@ -20,6 +20,7 @@ assert ssl.create_default_context().get_ca_certs()
 assert sqlite3.connect(':memory:').execute('select 1').fetchone() == (1,)
 assert os.getuid() == 10001
 assert pathlib.Path('/data').stat().st_mode & 0o777 == 0o700
+assert pathlib.Path('/usr/local/lib/python3.12/LICENSE.txt').is_file()
 print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION,
  'expat':pyexpat.EXPAT_VERSION,'all_shipped_extensions_import':True,
  'ca_certificates':True,'sqlite':True,'uid':os.getuid(),
@@ -44,6 +45,7 @@ print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION
             assert any(path.startswith('var/lib/dpkg/status.d/') for path in files), 'Runtime package records missing'
             if name == 'angelic':
                 assert 'usr/local/bin/postrelay-angelic' in files
+                assert 'usr/share/doc/angelic-angel/Cargo.lock' in files
                 assert not any('/python' in path for path in files), 'Python remains in Rust receiver'
             (output / (name + '-files.json')).write_text(json.dumps(files, sort_keys=True, indent=2) + '\n')
         finally:

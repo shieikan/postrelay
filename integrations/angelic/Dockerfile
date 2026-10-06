@@ -18,6 +18,8 @@ COPY --from=build --chown=10001:10001 /private /private
 COPY --from=build /src/target/release/angelic-angel /usr/local/bin/angelic-angel
 COPY --from=build /src/target/release/postrelay-angelic /usr/local/bin/postrelay-angelic
 COPY --from=build /src/LICENSE /usr/share/doc/angelic-angel/LICENSE
+COPY --from=build /src/Cargo.lock /usr/share/doc/angelic-angel/Cargo.lock
+COPY LICENSE /usr/share/doc/postrelay/LICENSE
 USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/postrelay-angelic"]
 CMD ["listen"]

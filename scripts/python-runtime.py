@@ -46,7 +46,7 @@ def main():
         for value in re.findall(r'(?:=>\s+)?(/[^\s]+)\s+\(', result.stdout):
             soname = Path(value).name
             dependency = Path(value).resolve()
-            if str(dependency).startswith('/usr/local/') or BASE_LIBRARIES.fullmatch(dependency.name):
+            if dependency.is_relative_to(local) or str(dependency).startswith('/usr/local/') or BASE_LIBRARIES.fullmatch(dependency.name):
                 continue
             target = root / dependency.relative_to('/')
             if dependency not in copied:
