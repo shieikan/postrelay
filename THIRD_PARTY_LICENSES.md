@@ -31,6 +31,6 @@ SOFTWARE.
 
 ## Container runtime components
 
-The application container uses official CPython3.12.15 on Google's distroless Debian13 runtime. CPython's installed `LICENSE.txt` is retained under `/usr/local/lib/python3.12/`. Added Debian libraries retain their package records and copyright notices under `/var/lib/dpkg/status.d/` and `/usr/share/doc/`. The build inventory is `/usr/share/postrelay/python-runtime.json`; CI saves the actual file inventory and SBOM. Optional curses/readline/Tk extensions and pip are omitted because the application does not use them.
+The application container uses official CPython3.12.15 on Google's distroless Debian13 runtime. CPython's installed `LICENSE.txt` is retained under `/usr/local/lib/python3.12/`. Added Debian libraries retain their package records and copyright notices under `/var/lib/dpkg/status.d/` and `/usr/share/doc/`. The build inventory is `/usr/share/postrelay/python-runtime.json`; CI saves the actual file inventory and SBOM. Optional curses/readline/Tk/native UUID extensions and pip are omitted because the application does not use them.
 
 The receiver uses the same distroless runtime and retains Angelic-Angel's MIT notice in `/usr/share/doc/angelic-angel/LICENSE`. Its exact upstream revision, source checksum, patch and dependency lock are documented in [integrations/README.md](integrations/README.md). Distroless retains notices and package records for its own components; these components retain their respective licenses and are not relicensed by PostRelay.

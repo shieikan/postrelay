@@ -73,6 +73,8 @@ jobs:
         env:
           POSTRELAY_SIGNUP_KEY: synthetic-ci-registration-key
         run: docker compose -p postrelay --profile x build --pull
+      - name: Verify actual runtime components and preserve inventories
+        run: python scripts/runtime-evidence.py "$RUNNER_TEMP/image-reports"
       - name: Test application in an isolated Linux container
         run: >-
           docker run --rm --network none
@@ -83,8 +85,6 @@ jobs:
         env:
           POSTRELAY_SIGNUP_KEY: synthetic-ci-registration-key
         run: python scripts/compose-smoke.py
-      - name: Verify actual runtime components and preserve inventories
-        run: python scripts/runtime-evidence.py "$RUNNER_TEMP/image-reports"
       - name: Check source CLI without credentials or network
         run: |
           docker run --rm --network none postrelay-angelic help

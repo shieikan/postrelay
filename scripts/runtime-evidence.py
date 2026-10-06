@@ -43,6 +43,7 @@ print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION
             for forbidden in ['bin/sh', 'usr/bin/sh', 'bin/mount', 'usr/bin/mount', 'usr/bin/nsenter',
                               'usr/bin/infocmp', 'usr/bin/perl', 'usr/lib/systemd/systemd-homed']:
                 assert forbidden not in files, 'Unused executable remains in runtime image'
+            (output / (name + '-files.json')).write_text(json.dumps(files, sort_keys=True, indent=2) + '\n')
             private_path = 'private' if name == 'angelic' else 'data'
             assert files[private_path]['mode'] == '0o700'
             assert files[private_path]['uid'] == files[private_path]['gid'] == 10001

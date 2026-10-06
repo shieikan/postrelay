@@ -32,8 +32,8 @@ def main():
         finally:
             connection.close()
 
-    compose('up', '-d', '--wait', 'postrelay')
     try:
+        compose('up', '-d', '--wait', 'postrelay')
         bootstrap, _ = request('/api/bootstrap')
         assert bootstrap['source']['web_push'] and bootstrap['mode'] == 'selfhost'
         _, headers = request('/api/register', {'email': 'ci@example.test',
@@ -77,6 +77,9 @@ else:
         print(json.dumps({'health': True, 'session_feed_history_preserved': True,
                           'public_push_status': 404, 'private_bad_token_status': 401,
                           'external_notifications_sent': 0}))
+    except Exception:
+        compose('logs', '--no-color', '--tail', '30', 'postrelay')
+        raise
     finally:
         # No volumes are deleted. The ephemeral runner owns this project.
         compose('down')
