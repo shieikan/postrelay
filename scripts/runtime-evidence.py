@@ -63,7 +63,10 @@ print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION
             if name == 'angelic':
                 assert 'usr/local/bin/postrelay-angelic' in files
                 assert 'usr/share/doc/angelic-angel/Cargo.lock' in files
-                assert not any('/python' in path for path in files), 'Python remains in Rust receiver'
+                # GCC includes inert debugger pretty-printers; they are not a Python runtime.
+                assert not any(path.startswith(('usr/bin/python', 'usr/local/bin/python',
+                    'usr/lib/python', 'usr/local/lib/python')) for path in files), 'Python runtime remains in Rust receiver'
+                assert 'usr/local/lib/angelic-runner.py' not in files
         finally:
             subprocess.run(['docker', 'rm', container], check=True, capture_output=True)
     print('Runtime inventories retained and required components checked: ' + ', '.join(names))
