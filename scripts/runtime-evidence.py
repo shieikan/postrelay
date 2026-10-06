@@ -19,6 +19,7 @@ assert tuple(map(int,pyexpat.EXPAT_VERSION.removeprefix('expat_').split('.'))) >
 assert ssl.create_default_context().get_ca_certs()
 assert sqlite3.connect(':memory:').execute('select 1').fetchone() == (1,)
 assert os.getuid() == 10001
+assert os.environ.get('LOCALDOMAIN') == '.'
 assert pathlib.Path('/data').stat().st_mode & 0o777 == 0o700
 assert pathlib.Path('/usr/local/lib/python3.12/LICENSE.txt').is_file()
 print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION,
@@ -30,6 +31,8 @@ print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION
                             'python', '-B', '-c', probe], capture_output=True, text=True, check=True).stdout
     (output / 'python-runtime.json').write_text(facts)
     for image, name in [('postrelay-postrelay', 'postrelay'), ('postrelay-angelic', 'angelic')]:
+        metadata = json.loads(subprocess.run(['docker', 'image', 'inspect', image], capture_output=True, text=True, check=True).stdout)[0]
+        assert 'LOCALDOMAIN=.' in metadata['Config']['Env']
         container = subprocess.run(['docker', 'create', image], capture_output=True, text=True, check=True).stdout.strip()
         try:
             process = subprocess.Popen(['docker', 'export', container], stdout=subprocess.PIPE)

@@ -3,7 +3,7 @@ COPY scripts/python-runtime.py /tmp/python-runtime.py
 RUN python -B /tmp/python-runtime.py
 
 FROM gcr.io/distroless/cc-debian13:nonroot@sha256:e792ab3d241a468a4fd7519ddbbebe66b49b5f365771716ea688ad40b6c6f1c2
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 LD_LIBRARY_PATH=/usr/local/lib
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 LD_LIBRARY_PATH=/usr/local/lib LOCALDOMAIN=.
 WORKDIR /app
 COPY --from=python-runtime /runtime/ /
 # Keep the existing volume owner; do not change users' data permissions on upgrade.

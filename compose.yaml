@@ -6,6 +6,8 @@ services:
     command: ["python", "-m", "postrelay", "--host", "0.0.0.0", "--mode", "selfhost", "--live", "--relay-web-push", "--push-port", "8767", "--data-dir", "/data"]
     ports:
       - "127.0.0.1:${POSTRELAY_PORT:-8765}:8765"
+    # Avoid inheriting long DHCP/VPN DNS search domains (glibc CVE-2026-8674).
+    dns_search: ["."]
     environment:
       POSTRELAY_PUBLIC_URL: "${POSTRELAY_PUBLIC_URL:-http://localhost:8765}"
       POSTRELAY_SIGNUP_KEY: "${POSTRELAY_SIGNUP_KEY:?Set a random registration key with at least 20 characters}"
