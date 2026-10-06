@@ -1,4 +1,4 @@
-FROM rust:1.88-bookworm@sha256:af306cfa71d987911a781c37b59d7d67d934f49684058f96cf72079c3626bfe02 AS build
+FROM rust:1.88-bookworm@sha256:af306cfa71d987911a781c37b59d7d67d934f49684058f96cf72079c3626bfe0 AS build
 WORKDIR /src
 RUN curl --fail --location --silent --show-error \
     https://codeload.github.com/sh1ma/Angelic-Angel/tar.gz/169a098e2025cc6e41a50fc8d521c483e21d9b6d -o source.tar.gz \
