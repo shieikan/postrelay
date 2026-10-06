@@ -42,8 +42,12 @@ jobs:
       - run: bandit -r postrelay scripts integrations/angelic -ll
       - name: Check the development analysis-tool dependencies
         run: pip-audit --strict -r requirements-dev.txt
-      - run: python scripts/get-security-tools.py --only gitleaks --directory "$RUNNER_TEMP/scanners"
+      - run: python scripts/get-security-tools.py --directory "$RUNNER_TEMP/scanners"
       - run: "$RUNNER_TEMP/scanners/gitleaks git --redact --no-banner --config .gitleaks.toml"
+      - name: Check the shipped Rust dependency lock
+        run: >-
+          "$RUNNER_TEMP/scanners/trivy" fs --scanners vuln
+          --exit-code 1 integrations/angelic
   containers:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -56,9 +60,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Build Linux amd64 application and fixed X receiver
+        id: images
         env:
           POSTRELAY_SIGNUP_KEY: synthetic-ci-registration-key
-        run: docker compose --profile x build --pull
+        run: docker compose -p postrelay --profile x build --pull
       - name: Test application in an isolated Linux container
         run: >-
           docker run --rm --network none
@@ -66,11 +71,38 @@ jobs:
           --mount type=bind,source=${{ github.workspace }}/integrations/angelic/runner.py,target=/app/integrations/angelic/runner.py,readonly
           --mount type=bind,source=${{ github.workspace }}/scripts,target=/app/scripts,readonly
           postrelay-postrelay python -B -m unittest discover -s tests -v
+      - name: Check fresh setup, persistence and private ingress
+        env:
+          POSTRELAY_SIGNUP_KEY: synthetic-ci-registration-key
+        run: python scripts/compose-smoke.py
       - name: Check source CLI without credentials or network
         run: docker run --rm --network none postrelay-angelic help
       - name: Install scanner
+        if: always() && steps.images.outcome == 'success'
         run: python scripts/get-security-tools.py --only trivy --directory "$RUNNER_TEMP/scanners"
-      - name: Check actual runtime images for known high and critical vulnerabilities
+      - name: Scan both actual runtime images without suppressing findings
+        if: always() && steps.images.outcome == 'success'
+        id: image_scan
         run: |
-          "$RUNNER_TEMP/scanners/trivy" image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 postrelay-postrelay
-          "$RUNNER_TEMP/scanners/trivy" image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 postrelay-angelic
+          mkdir -p "$RUNNER_TEMP/image-reports"
+          "$RUNNER_TEMP/scanners/trivy" image --scanners vuln --format json --output "$RUNNER_TEMP/image-reports/postrelay.json" postrelay-postrelay
+          "$RUNNER_TEMP/scanners/trivy" image --scanners vuln --format json --output "$RUNNER_TEMP/image-reports/angelic.json" postrelay-angelic
+          docker image inspect postrelay-postrelay postrelay-angelic > "$RUNNER_TEMP/image-reports/image-identities.json"
+      - name: Save synthetic runtime scan results
+        if: always() && steps.image_scan.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: runtime-image-scans
+          path: ${{ runner.temp }}/image-reports
+          retention-days: 14
+          if-no-files-found: error
+      - name: Enforce the application High/Critical image gate
+        if: always() && steps.image_scan.outcome == 'success'
+        run: >-
+          "$RUNNER_TEMP/scanners/trivy" image --scanners vuln
+          --severity HIGH,CRITICAL --exit-code 1 postrelay-postrelay
+      - name: Enforce the receiver High/Critical image gate
+        if: always() && steps.image_scan.outcome == 'success'
+        run: >-
+          "$RUNNER_TEMP/scanners/trivy" image --scanners vuln
+          --severity HIGH,CRITICAL --exit-code 1 postrelay-angelic
