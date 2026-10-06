@@ -231,6 +231,10 @@ small a { display: inline-block; margin-top: 4px; }
 .advanced-connection .details-body > p { margin: 10px 0; color: var(--muted); font-size: 13px; }
 .settings-links { display: flex; align-items: center; flex-wrap: wrap; gap: 26px; margin-top: 35px; padding-top: 19px; border-top: 1px solid var(--line); }
 .settings-links .text-button { text-decoration: underline; text-underline-offset: 4px; }
+.source-notice { margin: 20px 0; padding: 16px 18px; border-left: 3px solid var(--accent); background: #eef1fb; font-size: 13px; }
+.source-notice p { margin: 0 0 10px; }
+.source-notice label { display: flex; flex-direction: row; align-items: flex-start; gap: 10px; margin: 0; }
+.source-notice input { width: auto; margin-top: 4px; flex: 0 0 auto; }
 .simple-details { padding: 5px 0; margin-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .simple-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 45px; color: var(--muted); font-weight: 550; }
 .simple-details p { margin: 6px 0 15px; line-height: 1.85; }

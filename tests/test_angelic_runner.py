@@ -1,8 +1,9 @@
 import importlib.util
-import os
+import warnings
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('angelic_runner',
     Path(__file__).resolve().parents[1] / 'integrations' / 'angelic' / 'runner.py')
@@ -11,6 +12,20 @@ spec.loader.exec_module(runner)
 
 
 class AngelicRunnerTests(unittest.TestCase):
+    def test_hidden_input_fails_closed_if_terminal_echo_cannot_be_disabled(self):
+        def fallback(_prompt):
+            warnings.warn('Cannot control echo on terminal.', runner.getpass.GetPassWarning)
+            return 'synthetic_token_' + 'x' * 30
+        with tempfile.TemporaryDirectory() as folder:
+            private = Path(folder)
+            with patch.object(runner, 'private_directory', return_value=private), \
+                    patch.object(runner.sys, 'argv', ['runner', 'set-receiver']), \
+                    patch.object(runner.os, 'umask'), \
+                    patch.object(runner.getpass, 'getpass', side_effect=fallback):
+                with self.assertRaises(SystemExit):
+                    runner.main()
+            self.assertFalse((private / 'postrelay-token').exists())
+
     def test_copied_dashboard_url_is_converted_to_fixed_private_ingress(self):
         token = 'synthetic_token_' + 'x' * 30
         url = runner.receiver_url('https://app.example.test/api/hooks/' + token)

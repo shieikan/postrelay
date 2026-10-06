@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+# Local, ignored operational evidence is not part of the shipped source.
+[allowlist]
+paths = ['(^|/)work/', '(^|/)\.git/']

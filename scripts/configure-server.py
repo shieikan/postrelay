@@ -2,24 +2,17 @@
 import argparse
 import os
 import secrets
+import sys
 from pathlib import Path
-from urllib.parse import urlsplit
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from postrelay.security import normalize_origin
 
 
 def configure(directory, port=8765, origin=None):
     if not 1 <= port <= 65535:
         raise ValueError('ポート番号を確認してください。')
-    origin = origin or f'http://localhost:{port}'
-    try:
-        parsed = urlsplit(origin)
-        valid = (parsed.scheme in {'http', 'https'} and parsed.netloc
-                 and not parsed.username and not parsed.password and parsed.path in {'', '/'}
-                 and not parsed.query and not parsed.fragment
-                 and not any(ch.isspace() for ch in origin) and '$' not in origin)
-    except ValueError:
-        valid = False
-    if not valid:
-        raise ValueError('ブラウザーで使うURLは、パスや認証情報を含まないHTTP(S)のURLにしてください。')
+    origin = normalize_origin(origin or f'http://localhost:{port}')
     path = Path(directory) / '.env'
     content = (f'POSTRELAY_PORT={port}\nPOSTRELAY_PUBLIC_URL={origin.rstrip("/")}\n'
                f'POSTRELAY_SIGNUP_KEY={secrets.token_urlsafe(32)}\n')

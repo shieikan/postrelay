@@ -4,6 +4,8 @@ Source: [sh1ma/Angelic-Angel](https://github.com/sh1ma/Angelic-Angel), commit `1
 
 The optional Compose source container builds this pinned upstream with the patch applied. Interactive setup, private storage and server startup are documented in the [server guide](../docs/server.md). The Dockerfile verifies the downloaded archive's SHA-256 before building; PostRelay and Angelic-Angel run as separate processes.
 
+The source container replaces the upstream Cargo.lock with [the reviewed security lockfile](angelic/Cargo.lock). Targeted compatible updates cover the TLS/crypto and HTTP dependencies identified by the vulnerability scan; Cargo.toml and the upstream source pin stay unchanged. This override is part of the local integration, not an upstream release. Copy that lockfile into a standalone patched checkout before running the commands below if you want the same dependency versions as the source container.
+
 Apply inside a clean checkout of the pinned commit, using the actual path to this directory:
 
 ```sh
@@ -16,7 +18,7 @@ The patch hides credentials, subscription endpoints and notification contents in
 
 A non-2xx Webhook response becomes a processing error and the existing listener emits NotDelivered instead of Delivered. Backoff/fatal classifications are retained independently from redacted error formatting. This does not add durable source-side retry or prove that AutoPush redelivers failed notifications. Actual X/Discord credentials, notification schema and live delivery are not part of the patch's verification.
 
-Verification: 11 local unit tests and 1 CLI test passed; locked debug build passed; Cargo.toml and Cargo.lock unchanged; patch application reconstructed all 7 changed/new files exactly. No account registration, live listening or external message was performed. The tests use synthetic values and loopback HTTP only.
+Original hardening-patch verification: 11 local unit tests and 1 CLI test passed; locked debug build passed; Cargo.toml and the original Cargo.lock were unchanged; patch application reconstructed all 7 changed/new files exactly. No account registration, live listening or external message was performed in that patch test. Later security-lock/build checks are recorded in [VERIFICATION.md](../VERIFICATION.md). The tests use synthetic values and loopback HTTP only.
 
 Upstream and patch redistribution retain this license:
 

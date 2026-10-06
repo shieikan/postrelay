@@ -5,8 +5,10 @@ RUN curl --fail --location --silent --show-error \
     && echo 'c30c954297248871c72523ca0413960a3b26de70391de68b5d97b1f8954c6bb7  source.tar.gz' | sha256sum --check \
     && tar -xzf source.tar.gz --strip-components=1 && rm source.tar.gz
 COPY integrations/angelic-hardening.patch /tmp/angelic-hardening.patch
-RUN patch -p1 < /tmp/angelic-hardening.patch \
-    && cargo test --locked && cargo build --locked --release
+RUN patch -p1 < /tmp/angelic-hardening.patch
+# Targeted security updates override the upstream lock, not its source identity.
+COPY integrations/angelic/Cargo.lock /src/Cargo.lock
+RUN cargo test --locked && cargo build --locked --release
 
 FROM debian:bookworm-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1

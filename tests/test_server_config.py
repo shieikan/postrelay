@@ -26,3 +26,11 @@ class ServerConfigTests(unittest.TestCase):
                 with self.subTest(origin=origin), self.assertRaises(ValueError):
                     config.configure(directory, origin=origin)
                 self.assertFalse((Path(directory) / '.env').exists())
+
+    def test_origins_require_a_host_valid_port_and_https_for_remote_access(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for origin in ['http://:8765', 'https://example.test:99999', 'https://example.test:abc',
+                           'http://example.test', 'https://:password@example.test']:
+                with self.subTest(origin=origin), self.assertRaises(ValueError):
+                    config.configure(directory, origin=origin)
+                self.assertFalse((Path(directory) / '.env').exists())

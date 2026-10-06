@@ -5,6 +5,7 @@ import re
 import stat
 import sys
 import tempfile
+import warnings
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -79,7 +80,9 @@ def main():
     try:
         directory = private_directory('/private')
         if command == 'set-receiver':
-            value = getpass.getpass('PostRelayの受け取りURL（入力は非表示）: ')
+            with warnings.catch_warnings():
+                warnings.simplefilter('error', getpass.GetPassWarning)
+                value = getpass.getpass('PostRelayの受け取りURL（入力は非表示）: ')
             save_receiver(directory, value)
             print('PostRelayとの接続設定を保存しました（値は非表示）。')
             return
@@ -88,7 +91,7 @@ def main():
             env['WEBHOOK_ENDPOINT'] = load_receiver(directory)
         binary = '/usr/local/bin/angelic-angel'
         os.execve(binary, [binary, '--config', str(directory / 'angelic-angel.toml'), command], env)
-    except (OSError, ValueError):
+    except (OSError, ValueError, getpass.GetPassWarning):
         raise SystemExit('接続設定を確認してください。保存先は0700、秘密ファイルは0600にし、初期設定を完了してください。') from None
 
 

@@ -1,0 +1,76 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.9', '3.12', '3.14']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -B -m unittest discover -s tests -v
+      - run: node --test tests/*.test.cjs
+      - run: node --check web/app.js && node --check web/notification-settings.js
+  analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --require-hashes -r requirements-dev.txt
+      - run: ruff check --select F postrelay scripts integrations/angelic tests
+      - run: bandit -r postrelay scripts integrations/angelic -ll
+      - name: Check the development analysis-tool dependencies
+        run: pip-audit --strict -r requirements-dev.txt
+      - run: python scripts/get-security-tools.py --only gitleaks --directory "$RUNNER_TEMP/scanners"
+      - run: "$RUNNER_TEMP/scanners/gitleaks git --redact --no-banner --config .gitleaks.toml"
+  containers:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Build Linux amd64 application and fixed X receiver
+        env:
+          POSTRELAY_SIGNUP_KEY: synthetic-ci-registration-key
+        run: docker compose --profile x build --pull
+      - name: Test application in an isolated Linux container
+        run: >-
+          docker run --rm --network none
+          --mount type=bind,source=${{ github.workspace }}/tests,target=/app/tests,readonly
+          --mount type=bind,source=${{ github.workspace }}/integrations/angelic/runner.py,target=/app/integrations/angelic/runner.py,readonly
+          --mount type=bind,source=${{ github.workspace }}/scripts,target=/app/scripts,readonly
+          postrelay-postrelay python -B -m unittest discover -s tests -v
+      - name: Check source CLI without credentials or network
+        run: docker run --rm --network none postrelay-angelic help
+      - name: Install scanner
+        run: python scripts/get-security-tools.py --only trivy --directory "$RUNNER_TEMP/scanners"
+      - name: Check actual runtime images for known high and critical vulnerabilities
+        run: |
+          "$RUNNER_TEMP/scanners/trivy" image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 postrelay-postrelay
+          "$RUNNER_TEMP/scanners/trivy" image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 postrelay-angelic

@@ -3,6 +3,18 @@ from postrelay.security import validate_webhook, normalize_notification, matches
 
 
 class SecurityTests(unittest.TestCase):
+    def test_malformed_url_errors_do_not_echo_sensitive_values(self):
+        marker = 'SYNTHETIC_PRIVATE_MARKER'
+        value = 'https://discord.com／api／webhooks／123／' + marker
+        with self.assertRaises(ValueError) as caught:
+            validate_webhook(value)
+        self.assertNotIn(marker, str(caught.exception))
+        post = {'id': '123', 'author': 'example', 'text': 'public',
+                'url': 'https://x.com／' + marker}
+        with self.assertRaises(ValueError) as caught:
+            normalize_notification(post)
+        self.assertNotIn(marker, str(caught.exception))
+
     def test_technical_keyword_cap_combines_include_and_exclude(self):
         feed = {'handle': 'example', 'channel': 'news',
                 'include': [f'include{i}' for i in range(60)],

@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import ipaddress
 import re
 import secrets
 from urllib.parse import urlsplit
@@ -8,6 +9,35 @@ HANDLE = re.compile(r'^[A-Za-z0-9_]{1,15}$')
 POST_ID = re.compile(r'^[0-9]{1,19}$')
 DISCORD_HOSTS = {'discord.com', 'ptb.discord.com', 'canary.discord.com'}
 REQUIRED_FIELDS = ('id', 'author', 'text', 'url')
+
+
+def normalize_origin(value):
+    message = 'ブラウザーのURLには、認証情報やパスを含まないURLを指定してください。外部ホストにはHTTPSが必要です。'
+    if not isinstance(value, str) or not value or len(value) > 2048 or '$' in value or any(ch.isspace() or ord(ch) < 32 for ch in value):
+        raise ValueError(message)
+    try:
+        parsed = urlsplit(value)
+        if (parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.path not in {'', '/'}
+                or parsed.query or parsed.fragment or parsed.username is not None or parsed.password is not None):
+            raise ValueError(message)
+        port = parsed.port
+        if port is not None and not 1 <= port <= 65535:
+            raise ValueError(message)
+        host = parsed.hostname.encode('idna').decode('ascii').lower()
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            address = None
+            if len(host) > 253 or not all(re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label) for label in host.split('.')):
+                raise ValueError(message)
+        if parsed.scheme == 'http' and not (host == 'localhost' or address and address.is_loopback):
+            raise ValueError(message)
+        if ':' in host:
+            host = '[' + host + ']'
+        suffix = '' if port is None or port == (80 if parsed.scheme == 'http' else 443) else ':' + str(port)
+        return parsed.scheme + '://' + host + suffix
+    except (ValueError, UnicodeError):
+        raise ValueError(message) from None
 
 
 def digest_token(value):
@@ -38,8 +68,8 @@ def verify_password(password, encoded):
 def validate_webhook(value):
     if not isinstance(value, str) or len(value) > 500:
         raise ValueError('Discordの送信先URL（Webhook）を確認してください。')
-    parsed = urlsplit(value)
     try:
+        parsed = urlsplit(value)
         valid = (parsed.scheme == 'https' and parsed.hostname in DISCORD_HOSTS
                  and parsed.netloc == parsed.hostname and not parsed.username and not parsed.password
                  and parsed.port is None and not parsed.query and not parsed.fragment
@@ -86,7 +116,10 @@ def normalize_notification(payload, mapping=None):
         raise ValueError('投稿IDまたはXのユーザー名を確認してください。')
     if not 1 <= len(data['text']) <= 4000:
         raise ValueError('通知本文は1〜4000文字にしてください。')
-    parsed = urlsplit(data['url'])
+    try:
+        parsed = urlsplit(data['url'])
+    except ValueError:
+        raise ValueError('公開投稿のURLを確認してください。') from None
     expected_path = f'/{author}/status/{data["id"]}'
     if (parsed.scheme != 'https' or parsed.netloc not in {'x.com', 'twitter.com'}
             or parsed.path.lower() != expected_path or parsed.query or parsed.fragment):

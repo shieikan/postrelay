@@ -5,12 +5,13 @@ import threading
 from urllib.parse import urlsplit
 from pathlib import Path
 from .store import Store
-from .server import make_server
+from .server import make_server, ANY_HOST
+from .security import normalize_origin
 
 
 def main():
     parser = argparse.ArgumentParser(description='PostRelay self-hosted notification dashboard')
-    parser.add_argument('--host', default='127.0.0.1', choices=['127.0.0.1', '0.0.0.0'])
+    parser.add_argument('--host', default='127.0.0.1', choices=['127.0.0.1', ANY_HOST])
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--data-dir', default='./data')
     parser.add_argument('--mode', choices=['demo', 'selfhost'], default='demo')
@@ -21,12 +22,13 @@ def main():
     parser.add_argument('--public-url', default=os.environ.get('POSTRELAY_PUBLIC_URL', ''))
     args = parser.parse_args()
     signup_key = os.environ.get('POSTRELAY_SIGNUP_KEY', '')
-    if args.host == '0.0.0.0' and (not args.public_url or len(signup_key) < 20):
+    if args.host == ANY_HOST and (not args.public_url or len(signup_key) < 20):
         parser.error('0.0.0.0 requires an explicit public URL and POSTRELAY_SIGNUP_KEY of at least 20 characters')
     if args.public_url:
-        parsed = urlsplit(args.public_url)
-        if parsed.scheme not in {'http', 'https'} or not parsed.netloc or parsed.path not in {'', '/'} or parsed.query or parsed.fragment or parsed.username:
-            parser.error('public URL must be an HTTP(S) origin without a path or credentials')
+        try:
+            args.public_url = normalize_origin(args.public_url)
+        except ValueError as error:
+            parser.error(str(error))
     if args.mode == 'demo' and args.live:
         parser.error('demo mode cannot enable live delivery')
     if not 0 <= args.port <= 65535 or not 1 <= args.push_port <= 65535:
@@ -44,7 +46,8 @@ def main():
     server = make_server(store, host=args.host, port=args.port,
                          mode=args.mode, live=args.live, public_url=args.public_url, signup_key=signup_key,
                          capture_push=args.capture_push and not private_ingress,
-                         relay_web_push=args.relay_web_push and not private_ingress)
+                         relay_web_push=args.relay_web_push and not private_ingress,
+                         web_push_source=args.relay_web_push)
     servers = [server]
     if private_ingress:
         try:

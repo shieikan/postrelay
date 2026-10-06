@@ -1,0 +1,4 @@
+# Analysis tools only; the application uses Python's standard library.
+ruff==0.16.10
+bandit==1.9.4
+pip-audit==2.10.1

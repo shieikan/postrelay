@@ -1,6 +1,5 @@
 import hmac
 import json
-import os
 import secrets
 import threading
 import time
@@ -16,6 +15,8 @@ from .webpush import normalize_web_push, PushUnavailable
 
 WEB_ROOT = Path(__file__).resolve().parent.parent / 'web'
 MAX_BODY = 65536
+# Explicit Docker listener; Compose publishes its host port on loopback only.
+ANY_HOST = '0.0.0.0'  # nosec B104
 
 
 class App:
@@ -72,13 +73,14 @@ class App:
         return False
 
 
-def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, public_url='', signup_key='', capture_push=False, relay_web_push=False):
+def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, public_url='', signup_key='', capture_push=False, relay_web_push=False, web_push_source=False):
     if mode not in {'demo', 'selfhost'} or (mode == 'demo' and live):
         raise ValueError('デモではDiscordへ送信できません。')
     if (capture_push or relay_web_push) and (mode != 'selfhost' or host != '127.0.0.1'
                          or (public_url and urlsplit(public_url).hostname not in {'127.0.0.1', 'localhost'})):
         raise ValueError('X通知の受信は、セルフホストのループバック接続だけで利用できます。')
     app = App(store, mode, live, public_url, signup_key)
+    app.web_push_source = bool(relay_web_push or web_push_source)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = 'PostRelay'
@@ -153,15 +155,17 @@ def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, pub
                 return self.json(403, {'error': 'アクセス元を確認してください。'})
             path = urlsplit(self.path).path
             if path == '/api/bootstrap':
-                return self.json(200, dict(mode=app.mode, live=app.live, limits=LIMITS, user=self.user()))
+                return self.json(200, dict(mode=app.mode, live=app.live, limits=LIMITS, user=self.user(),
+                                          source={'web_push': app.web_push_source}))
             if path == '/api/state':
                 user = self.user()
                 if not user:
                     return self.json(401, {'error': 'ログインしてください。'})
                 return self.json(200, dict(user=user, feeds=app.store.list_feeds(user['id']),
                      jobs=app.store.list_jobs(user['id']), stats=app.store.stats(user['id']),
-                     mode=app.mode, live=app.live, limits=LIMITS))
+                     mode=app.mode, live=app.live, limits=LIMITS, source={'web_push': app.web_push_source}))
             static = {'/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'),
+                      '/notification-settings.js': ('notification-settings.js', 'text/javascript'),
                       '/style.css': ('style.css', 'text/css'), '/favicon.svg': ('favicon.svg', 'image/svg+xml')}
             if path not in static:
                 return self.json(404, {'error': 'ページが見つかりません。'})
@@ -280,7 +284,7 @@ def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, pub
     server = ThreadingHTTPServer((host, port), Handler)
     server.daemon_threads = True
     if not app.public_url:
-        hostname = '127.0.0.1' if host == '0.0.0.0' else host
+        hostname = '127.0.0.1' if host == ANY_HOST else host
         app.public_url = f'http://{hostname}:{server.server_address[1]}'
     server.app = app
     server.worker = Worker(store, mode='live' if live else 'demo')

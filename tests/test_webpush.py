@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 from postrelay.webpush import normalize_web_push, PushUnavailable
 from postrelay.security import matches_feed
 
