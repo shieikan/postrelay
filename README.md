@@ -6,6 +6,8 @@ Xの公開投稿通知を、指定したDiscordチャンネルへ届けるセル
 
 **ソフトウェアは無料・MITライセンス。** 自分のサーバーで動かして使います。サーバーの運用費は利用者の負担です。
 
+試験版です。配布用Dockerイメージに未解消の既知脆弱性があるため、一般利用を推奨するリリースは保留しています。[安全性の確認記録](SECURITY_REVIEW.md)を確認してください。
+
 ## こんな使い方ができます
 
 | 使い方 | 通知先の例 | 設定の例 |
@@ -79,6 +81,7 @@ python3 -m postrelay --mode demo
 - [通知元の仕様](docs/notification-source.md)：Angelic-Angelの公開確認、他のツールから送るJSON。
 - [Angelic-Angel連携パッチ](integrations/README.md)：固定版、修正内容、上流ライセンス。
 - [検証記録](VERIFICATION.md)：確認したことと、未確認の範囲。
+- [安全性の確認記録](SECURITY_REVIEW.md)：スキャン・独立レビューの結果と未解消項目。
 - [貢献方法](CONTRIBUTING.md)、[脆弱性の報告](SECURITY.md)、[変更履歴](CHANGELOG.md)。
 
 開発用のテストは、リポジトリ内で次のように実行します。合成データとローカルHTTPを使い、実際のX・Discordへ送信しません。
