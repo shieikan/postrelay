@@ -78,7 +78,7 @@ def main():
         source = Path('/usr/share/doc') / name
         if source.exists():
             shutil.copytree(source, root / 'usr/share/doc' / name, symlinks=True, dirs_exist_ok=True)
-    Path('/runtime-data').mkdir(mode=0o700)
+    Path('/runtime-dirs/data').mkdir(mode=0o700, parents=True)
 
 
 if __name__ == '__main__':

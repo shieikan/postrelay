@@ -11,11 +11,11 @@ COPY integrations/angelic/Cargo.lock /src/Cargo.lock
 COPY integrations/angelic/runner.rs /src/src/bin/postrelay-angelic.rs
 COPY integrations/angelic/runner_cli.rs /src/tests/runner_cli.rs
 RUN cargo test --locked --release && cargo build --locked --release \
-    && mkdir -m700 /private
+    && mkdir -m700 -p /runtime-dirs/private
 
 FROM gcr.io/distroless/cc-debian13:nonroot@sha256:e792ab3d241a468a4fd7519ddbbebe66b49b5f365771716ea688ad40b6c6f1c2
 ENV LOCALDOMAIN=.
-COPY --from=build --chown=10001:10001 /private /private
+COPY --from=build --chown=10001:10001 /runtime-dirs/ /
 COPY --from=build /src/target/release/angelic-angel /usr/local/bin/angelic-angel
 COPY --from=build /src/target/release/postrelay-angelic /usr/local/bin/postrelay-angelic
 COPY --from=build /src/LICENSE /usr/share/doc/angelic-angel/LICENSE

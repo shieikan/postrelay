@@ -23,7 +23,7 @@ assert ssl.create_default_context().get_ca_certs(), 'No trusted CA certificates 
 assert sqlite3.connect(':memory:').execute('select 1').fetchone() == (1,)
 assert os.getuid() == 10001
 assert os.environ.get('LOCALDOMAIN') == '.'
-assert pathlib.Path('/data').stat().st_mode & 0o777 == 0o700
+assert pathlib.Path('/data').stat().st_mode & 0o777 == 0o700, 'Data directory permissions must be 0700'
 assert pathlib.Path('/usr/local/lib/python3.12/LICENSE.txt').is_file(), 'CPython license missing'
 print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION,
  'expat':pyexpat.EXPAT_VERSION,'all_shipped_extensions_import':True,

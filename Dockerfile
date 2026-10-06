@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 LD_LIBRARY_PATH=/usr/local/lib 
 WORKDIR /app
 COPY --from=python-runtime /runtime/ /
 # Keep the existing volume owner; do not change users' data permissions on upgrade.
-COPY --from=python-runtime --chown=10001:10001 /runtime-data /data
+COPY --from=python-runtime --chown=10001:10001 /runtime-dirs/ /
 COPY postrelay /app/postrelay
 COPY web /app/web
 COPY LICENSE /app/LICENSE
