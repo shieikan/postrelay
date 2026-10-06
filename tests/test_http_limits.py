@@ -112,3 +112,13 @@ class HTTPLimitTests(unittest.TestCase):
             client.close()
         self.assertEqual(len(self.server.app.rates), 0)
         self.healthy()
+
+    def test_transport_setup_failure_does_not_leak_admission_capacity(self):
+        # A deadline may close a socket before the serving thread resumes setup.
+        broken, peer = socket.socketpair()
+        broken.close(); peer.close()
+        with self.assertRaises(OSError):
+            self.server.process_request(broken, ('127.0.0.1', 1))
+        held = self.connect(); held.sendall(b'G')
+        time.sleep(.05)
+        self.healthy()  # Two real clients still fit after the failed admission.

@@ -42,8 +42,8 @@ class BoundedHTTPServer(ThreadingHTTPServer):
             return
         with self.connection_lock:
             self.connections[request] = time.monotonic() + self.deadline
-        request.settimeout(self.deadline)
         try:
+            request.settimeout(self.deadline)
             super().process_request(request, address)
         except Exception:
             self.release(request)

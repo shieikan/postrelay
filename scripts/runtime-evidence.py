@@ -55,7 +55,6 @@ print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION
                 assert 'usr/local/bin/postrelay-angelic' in files
                 assert 'usr/share/doc/angelic-angel/Cargo.lock' in files
                 assert not any('/python' in path for path in files), 'Python remains in Rust receiver'
-            (output / (name + '-files.json')).write_text(json.dumps(files, sort_keys=True, indent=2) + '\n')
         finally:
             subprocess.run(['docker', 'rm', container], check=True, capture_output=True)
     print('Both runtime inventories retained; unused executables absent; Python/SSL/Expat/SQLite checked.')

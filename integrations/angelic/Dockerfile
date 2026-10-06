@@ -10,7 +10,7 @@ RUN patch -p1 < /tmp/angelic-hardening.patch
 COPY integrations/angelic/Cargo.lock /src/Cargo.lock
 COPY integrations/angelic/runner.rs /src/src/bin/postrelay-angelic.rs
 COPY integrations/angelic/runner_cli.rs /src/tests/runner_cli.rs
-RUN cargo test --locked && cargo build --locked --release \
+RUN cargo test --locked --release && cargo build --locked --release \
     && mkdir -m700 /private
 
 FROM gcr.io/distroless/cc-debian13:nonroot@sha256:e792ab3d241a468a4fd7519ddbbebe66b49b5f365771716ea688ad40b6c6f1c2
