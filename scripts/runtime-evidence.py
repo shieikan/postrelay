@@ -11,26 +11,35 @@ def main():
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise SystemExit('Run this isolated image check in GitHub Actions only.')
     output = Path(sys.argv[1]); output.mkdir(parents=True, exist_ok=True)
+    names = sys.argv[2:] or ['postrelay', 'angelic']
+    if not set(names) <= {'postrelay', 'angelic'}:
+        raise SystemExit('Choose postrelay or angelic.')
     probe = """import importlib,json,pathlib,pyexpat,sqlite3,ssl,sys,os
 for path in pathlib.Path('/usr/local/lib/python3.12/lib-dynload').glob('*.so'):
     importlib.import_module(path.name.split('.')[0])
 assert sys.version_info[:3] == (3,12,15)
 assert tuple(map(int,pyexpat.EXPAT_VERSION.removeprefix('expat_').split('.'))) >= (2,8,5)
-assert ssl.create_default_context().get_ca_certs()
+assert ssl.create_default_context().get_ca_certs(), 'No trusted CA certificates loaded'
 assert sqlite3.connect(':memory:').execute('select 1').fetchone() == (1,)
 assert os.getuid() == 10001
 assert os.environ.get('LOCALDOMAIN') == '.'
 assert pathlib.Path('/data').stat().st_mode & 0o777 == 0o700
-assert pathlib.Path('/usr/local/lib/python3.12/LICENSE.txt').is_file()
+assert pathlib.Path('/usr/local/lib/python3.12/LICENSE.txt').is_file(), 'CPython license missing'
 print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION,
  'expat':pyexpat.EXPAT_VERSION,'all_shipped_extensions_import':True,
  'ca_certificates':True,'sqlite':True,'uid':os.getuid(),
  'build_inventory':json.loads(pathlib.Path('/usr/share/postrelay/python-runtime.json').read_text())}))
 """
-    facts = subprocess.run(['docker', 'run', '--rm', '--network', 'none', 'postrelay-postrelay',
-                            'python', '-B', '-c', probe], capture_output=True, text=True, check=True).stdout
-    (output / 'python-runtime.json').write_text(facts)
+    if 'postrelay' in names:
+        result = subprocess.run(['docker', 'run', '--rm', '--network', 'none', 'postrelay-postrelay',
+                                 'python', '-B', '-c', probe], capture_output=True, text=True)
+        if result.returncode:
+            # Only immutable synthetic CI images are inspected; no connection files are mounted.
+            raise SystemExit(result.stderr[:6000] or 'Runtime inspection failed.')
+        (output / 'python-runtime.json').write_text(result.stdout)
     for image, name in [('postrelay-postrelay', 'postrelay'), ('postrelay-angelic', 'angelic')]:
+        if name not in names:
+            continue
         metadata = json.loads(subprocess.run(['docker', 'image', 'inspect', image], capture_output=True, text=True, check=True).stdout)[0]
         assert 'LOCALDOMAIN=.' in metadata['Config']['Env']
         container = subprocess.run(['docker', 'create', image], capture_output=True, text=True, check=True).stdout.strip()
@@ -57,7 +66,7 @@ print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION
                 assert not any('/python' in path for path in files), 'Python remains in Rust receiver'
         finally:
             subprocess.run(['docker', 'rm', container], check=True, capture_output=True)
-    print('Both runtime inventories retained; unused executables absent; Python/SSL/Expat/SQLite checked.')
+    print('Runtime inventories retained and required components checked: ' + ', '.join(names))
 
 
 if __name__ == '__main__':

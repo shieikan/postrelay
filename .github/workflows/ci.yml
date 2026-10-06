@@ -68,19 +68,26 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - name: Build Linux amd64 application and fixed X receiver
-        id: images
+      - name: Build Linux amd64 application
+        id: application
         env:
           POSTRELAY_SIGNUP_KEY: synthetic-ci-registration-key
-        run: docker compose -p postrelay --profile x build --pull
-      - name: Verify actual runtime components and preserve inventories
-        run: python scripts/runtime-evidence.py "$RUNNER_TEMP/image-reports"
+        run: docker compose -p postrelay build --pull postrelay
+      - name: Verify actual application components and preserve inventory
+        run: python scripts/runtime-evidence.py "$RUNNER_TEMP/image-reports" postrelay
       - name: Test application in an isolated Linux container
         run: >-
           docker run --rm --network none
           --mount type=bind,source=${{ github.workspace }}/tests,target=/app/tests,readonly
           --mount type=bind,source=${{ github.workspace }}/scripts,target=/app/scripts,readonly
           postrelay-postrelay python -B -m unittest discover -s tests -v
+      - name: Build fixed X receiver in the release profile
+        id: images
+        env:
+          POSTRELAY_SIGNUP_KEY: synthetic-ci-registration-key
+        run: docker compose -p postrelay --profile x build --pull angelic
+      - name: Verify actual receiver components and preserve inventory
+        run: python scripts/runtime-evidence.py "$RUNNER_TEMP/image-reports" angelic
       - name: Check fresh setup, persistence and private ingress
         env:
           POSTRELAY_SIGNUP_KEY: synthetic-ci-registration-key
