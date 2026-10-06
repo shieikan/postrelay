@@ -4,6 +4,7 @@ Build-stage helper only: ELF dependencies are read from trusted official image
 binaries. No package metadata is erased to conceal an installed component.
 """
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -34,15 +35,17 @@ def main():
     (library / 'site-packages').mkdir()
     packages, copied = set(), set()
     pending = list(local.rglob('*.so')) + list(local.glob('lib/libpython*.so.*')) + [local / 'bin' / f'python{sys.version_info.major}.{sys.version_info.minor}']
+    pending = [Path("/usr/local") / p.relative_to(local) for p in pending]
     checked = set()
     while pending:
         binary = pending.pop().resolve()
         if binary in checked:
             continue
         checked.add(binary)
-        result = subprocess.run(['ldd', str(binary)], text=True, capture_output=True, check=True)
+        result = subprocess.run(['ldd', str(binary)], text=True, capture_output=True, check=True,
+                                env=dict(os.environ, LD_LIBRARY_PATH='/usr/local/lib'))
         if 'not found' in result.stdout:
-            raise RuntimeError('Unresolved Python ELF dependency')
+            raise RuntimeError('Unresolved trusted build library: ' + str(binary) + '\n' + result.stdout)
         for value in re.findall(r'(?:=>\s+)?(/[^\s]+)\s+\(', result.stdout):
             soname = Path(value).name
             dependency = Path(value).resolve()
