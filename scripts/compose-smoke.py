@@ -56,7 +56,7 @@ def main():
             assert time.monotonic() < deadline, 'Local worker did not settle.'
             time.sleep(0.25)
         request('/api/push/synthetic-invalid-token', {}, 404)
-        # Source image shares exactly the receiver network namespace.
+        # Check the receiver loopback namespace without adding Python to the Rust source image.
         private_check = """from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 request = Request('http://127.0.0.1:8767/api/push/synthetic-invalid-token',
@@ -68,7 +68,7 @@ except HTTPError as error:
 else:
     raise AssertionError('Private ingress did not reject the invalid token')
 """
-        compose('--profile', 'x', 'run', '--rm', '--entrypoint', 'python3', 'angelic', '-c', private_check)
+        compose('exec', '-T', 'postrelay', 'python', '-c', private_check)
         compose('restart', 'postrelay')
         compose('up', '-d', '--wait', 'postrelay')
         after, _ = request('/api/state')

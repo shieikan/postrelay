@@ -5,7 +5,8 @@ import threading
 import time
 from collections import defaultdict, deque
 from http.cookies import SimpleCookie
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
+from .http_server import BoundedHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 from .store import LIMITS
@@ -15,6 +16,8 @@ from .webpush import normalize_web_push, PushUnavailable
 
 WEB_ROOT = Path(__file__).resolve().parent.parent / 'web'
 MAX_BODY = 65536
+REQUEST_DEADLINE = 15
+MAX_CONNECTIONS = 16
 # Explicit Docker listener; Compose publishes its host port on loopback only.
 ANY_HOST = '0.0.0.0'  # nosec B104
 
@@ -120,6 +123,8 @@ def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, pub
         def body(self):
             if self.headers.get('Content-Type', '').split(';')[0].strip() != 'application/json':
                 raise ValueError('Content-Typeをapplication/jsonにしてください。')
+            if self.headers.get('Transfer-Encoding') or len(self.headers.get_all('Content-Length', [])) != 1:
+                raise ValueError('リクエストサイズが不正です。')
             try:
                 length = int(self.headers.get('Content-Length', '0'))
             except ValueError:
@@ -127,7 +132,10 @@ def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, pub
             if not 0 < length <= MAX_BODY:
                 raise ValueError('リクエストは64KB以内にしてください。')
             try:
-                data = json.loads(self.rfile.read(length))
+                raw = self.rfile.read(length)
+                if len(raw) != length:
+                    raise ValueError('リクエストサイズが不正です。')
+                data = json.loads(raw)
             except (ValueError, UnicodeError):
                 raise ValueError('JSONの形式を確認してください。')
             if not isinstance(data, dict):
@@ -274,6 +282,9 @@ def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, pub
                        url=f'https://x.com/{handle}/status/{post_id}'))
                     return self.json(202, app.store.ingest(user_id, post))
                 return self.json(404, {'error': '操作が見つかりません。'})
+            except (TimeoutError, ConnectionError):
+                self.close_connection = True
+                return
             except ValueError as error:
                 return self.json(400, {'error': str(error)})
             except KeyError:
@@ -281,8 +292,8 @@ def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, pub
             except Exception:
                 return self.json(500, {'error': '処理を完了できませんでした。時間を置いて再試行してください。'})
 
-    server = ThreadingHTTPServer((host, port), Handler)
-    server.daemon_threads = True
+    server = BoundedHTTPServer((host, port), Handler,
+                               deadline=REQUEST_DEADLINE, max_connections=MAX_CONNECTIONS)
     if not app.public_url:
         hostname = '127.0.0.1' if host == ANY_HOST else host
         app.public_url = f'http://{hostname}:{server.server_address[1]}'
