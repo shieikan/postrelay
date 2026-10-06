@@ -1,6 +1,7 @@
 import hmac
 import json
 import secrets
+import socket
 import threading
 import time
 from collections import defaultdict, deque
@@ -282,7 +283,7 @@ def make_server(store, host='127.0.0.1', port=8765, mode='demo', live=False, pub
                        url=f'https://x.com/{handle}/status/{post_id}'))
                     return self.json(202, app.store.ingest(user_id, post))
                 return self.json(404, {'error': '操作が見つかりません。'})
-            except (TimeoutError, ConnectionError):
+            except (TimeoutError, socket.timeout, ConnectionError):
                 self.close_connection = True
                 return
             except ValueError as error:

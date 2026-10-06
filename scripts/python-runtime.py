@@ -27,7 +27,7 @@ def main():
             path.unlink()
     library = local / f'lib/python{sys.version_info.major}.{sys.version_info.minor}'
     # Interactive terminal editing and package installation are not application features.
-    for pattern in ['lib-dynload/_curses*.so', 'lib-dynload/readline*.so']:
+    for pattern in ['lib-dynload/_curses*.so', 'lib-dynload/readline*.so', 'lib-dynload/_tkinter*.so']:
         for path in library.glob(pattern):
             path.unlink()
     for directory in ['ensurepip', 'site-packages']:
@@ -70,7 +70,7 @@ def main():
     inventory = {'python': sys.version.split()[0], 'openssl_build': ssl.OPENSSL_VERSION,
                  'bundled_expat': pyexpat.EXPAT_VERSION, 'extra_libraries': sorted(str(p) for p in copied),
                  'extra_debian_packages': sorted(packages), 'source': 'docker.io/library/python:3.12.15-slim-trixie',
-                 'omitted_optional_extensions': ['_curses', '_curses_panel', 'readline']}
+                 'omitted_optional_extensions': ['_curses', '_curses_panel', 'readline', '_tkinter']}
     info = root / 'usr/share/postrelay'
     info.mkdir(parents=True); (info / 'python-runtime.json').write_text(json.dumps(inventory, indent=2) + '\n')
     for package in packages:

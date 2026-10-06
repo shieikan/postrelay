@@ -35,13 +35,17 @@ print(json.dumps({'python':sys.version.split()[0], 'openssl':ssl.OPENSSL_VERSION
             process = subprocess.Popen(['docker', 'export', container], stdout=subprocess.PIPE)
             with tarfile.open(fileobj=process.stdout, mode='r|') as archive:
                 files = {member.name.lstrip('./'): {'mode': oct(member.mode), 'size': member.size,
-                                                   'type': member.type.decode('ascii')}
+                                                   'type': member.type.decode('ascii'),
+                                                   'uid': member.uid, 'gid': member.gid}
                          for member in archive}
             process.stdout.close()
             assert process.wait(timeout=30) == 0
             for forbidden in ['bin/sh', 'usr/bin/sh', 'bin/mount', 'usr/bin/mount', 'usr/bin/nsenter',
                               'usr/bin/infocmp', 'usr/bin/perl', 'usr/lib/systemd/systemd-homed']:
                 assert forbidden not in files, 'Unused executable remains in runtime image'
+            private_path = 'private' if name == 'angelic' else 'data'
+            assert files[private_path]['mode'] == '0o700'
+            assert files[private_path]['uid'] == files[private_path]['gid'] == 10001
             assert any(path.startswith('var/lib/dpkg/status.d/') for path in files), 'Runtime package records missing'
             if name == 'angelic':
                 assert 'usr/local/bin/postrelay-angelic' in files
