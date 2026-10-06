@@ -76,7 +76,9 @@ jobs:
           POSTRELAY_SIGNUP_KEY: synthetic-ci-registration-key
         run: python scripts/compose-smoke.py
       - name: Check source CLI without credentials or network
-        run: docker run --rm --network none postrelay-angelic help
+        run: |
+          docker run --rm --network none postrelay-angelic help
+          docker run --rm --network none --entrypoint /usr/local/bin/angelic-angel postrelay-angelic --help
       - name: Install scanner
         if: always() && steps.images.outcome == 'success'
         run: python scripts/get-security-tools.py --only trivy --directory "$RUNNER_TEMP/scanners"

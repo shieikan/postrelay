@@ -10,9 +10,9 @@ RUN patch -p1 < /tmp/angelic-hardening.patch
 COPY integrations/angelic/Cargo.lock /src/Cargo.lock
 RUN cargo test --locked && cargo build --locked --release
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-RUN apt-get update && apt-get install --yes --no-install-recommends ca-certificates python3 libssl3 \
+RUN apt-get update && apt-get install --yes --no-install-recommends ca-certificates python3 libssl3t64 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 angelic \
     && useradd --uid 10001 --gid 10001 --no-create-home angelic \
