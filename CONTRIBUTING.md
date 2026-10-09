@@ -25,6 +25,20 @@ node --check web/notification-settings.js
 git diff --check
 ```
 
+Cloudflare版は `cloudflare/` に独立しています。Node.js 22以降と、端末の非表示入力テスト用にPython 3を用意してください。
+
+```sh
+cd cloudflare
+npm ci
+npm test
+npm run build
+npm audit --audit-level=high
+```
+
+この `build` はデプロイしないdry runです。実行環境のテストはworkerdと合成の通知元・送信先を使います。Cloudflareのログインや実際のCookieは不要です。[構成・検証範囲](cloudflare/README.md)も確認してください。CIの「Cloudflare adapter」はNode.js 22・24で同じ確認を行い、自動デプロイはしません。
+
+以降のPython用コマンドはリポジトリのルートで実行します。
+
 静的解析ツールはアプリの実行依存ではありません。Python3.12以降の専用環境で使います。
 
 ```sh
@@ -35,7 +49,7 @@ python3 -m venv .venv
 .venv/bin/pip-audit --strict -r requirements-dev.txt
 ```
 
-アプリはPython標準ライブラリだけを使います。上のpip-auditは開発用解析ツールの依存を確認するもので、アプリのOS・Python本体やRust依存の安全性を証明するものではありません。コンテナのビルド・スキャンはCIで別途行います。
+Python版アプリはPython標準ライブラリだけを使います。上のpip-auditは開発用解析ツールの依存を確認するもので、アプリのOS・Python本体やRust依存の安全性を証明するものではありません。コンテナのビルド・スキャンはCIで別途行います。
 
 CIはpushとPRでテスト・静的解析・秘密情報検査を行います。Actionsの「CI」→「Run workflow」で手動実行すると、Linux/amd64で両方のコンテナをビルドし、ネットワークを無効にしたアプリのテスト、合成データによるComposeの起動・再起動後の保存と内部受信口、実際の両イメージの脆弱性検査も行います。検査結果のJSONはActionsの実行画面から14日間取得できます。既知のHigh/Criticalは修正または根拠付きの影響評価が終わるまで公開判断を止めます。結果は実行したコミットとデータベース日時の範囲に限定されます。
 

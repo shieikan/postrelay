@@ -2,9 +2,9 @@
 
 **Xの新着を、いつものDiscordへ。**
 
-Xの公開投稿通知を、指定したDiscordチャンネルへ届けるセルフホストのOSSです。ブラウザーから、通知するアカウント・送信先・キーワード条件を設定し、送信結果を確認できます。
+Xの公開投稿通知を、指定したDiscordチャンネルへ届けるセルフホストのOSSです。Docker版ではブラウザーから、通知するアカウント・送信先・キーワード条件を設定し、送信結果を確認できます。端末で設定するCloudflare版も実験的に追加しています。
 
-**ソフトウェアは無料・MITライセンス。** 自分のサーバーで動かして使います。サーバーの運用費は利用者の負担です。
+**ソフトウェアは無料・MITライセンス。** 自分のサーバー、または自分のCloudflareアカウントで動かします。運用費は利用者の負担です。Cloudflare版は無料枠内の運用を目指す構成ですが、実環境での使用量と継続受信は未検証です。
 
 試験版です。固定したLinux/amd64構成は起動・再起動とHigh/Critical検査を通過しました。Medium/Low等の検出と運用上の未確認事項は残ります。少人数の信頼できる環境で試し、[安全性の確認範囲](SECURITY_REVIEW.md)を確認してください。公開ホスティング向けの認定は行っていません。
 
@@ -19,6 +19,8 @@ Xの公開投稿通知を、指定したDiscordチャンネルへ届けるセル
 チャンネル名は架空の例です。受け取った通知の本文で絞り込むため、すべての告知を集められる保証はありません。送信先はDiscordチャンネルのWebhook URLで指定します。
 
 ## できること
+
+以下のGUI機能はDocker版・Python版で利用できます。
 
 - XアカウントとDiscordチャンネルの組み合わせを、GUIで追加・編集する。
 - 含める言葉・除外する言葉で通知を絞る。通知の停止・再開もできる。
@@ -52,6 +54,12 @@ docker compose up --build -d --wait
 
 接続には、通知を受け取るXアカウントのCookieと、DiscordチャンネルのWebhook URLが必要です。X側では通知したい投稿者をフォローし、投稿通知をオンにしてください。GUIでユーザー名を追加するだけでは、Xの通知設定は変わりません。
 
+## Cloudflareで使う（実験版）
+
+Workersと1つのDurable Objectで受信と配信を動かす構成です。常時起動するMacやVMは不要で、自分のCloudflareアカウント・通知用Xアカウント・Discord Webhookを使います。複数の投稿者とチャンネルを設定できます。GUIはなく、設定・停止・再開・再送は端末で操作します。
+
+[Cloudflare導入ガイド](docs/cloudflare.md)に、無料枠の概算、必要な接続情報、導入コマンド、保存・復旧の手順をまとめています。Angelic-Angelの通知受信処理をWorkers向けに移植し、ローカルで受信・公開確認・再送・再起動後の復旧を検証しました。実際のクラウド接続と長期運転は未検証です。
+
 ## 接続せずにGUIを試す
 
 Python 3.9以降があれば試せます。外部PythonパッケージやNode.jsは不要です。
@@ -77,6 +85,7 @@ python3 -m postrelay --mode demo
 ## ドキュメントと開発
 
 - [サーバー起動ガイド](docs/server.md)：Dockerでの接続・保存・継続運転。
+- [Cloudflare導入ガイド](docs/cloudflare.md)：MacやVMを常時起動しない実験版の導入・運用。
 - [利用・運用ガイド](docs/usage.md)：GUIの使い方、Pythonでの起動、上限とデータの扱い。
 - [通知元の仕様](docs/notification-source.md)：Angelic-Angelの公開確認、他のツールから送るJSON。
 - [Angelic-Angel連携パッチ](integrations/README.md)：固定版、修正内容、上流ライセンス。
@@ -92,4 +101,4 @@ python3 -B -m unittest discover -s tests -v
 
 ## ライセンス
 
-[MIT](LICENSE)。Angelic-Angelの著作権・ライセンス表示は[連携の説明](integrations/README.md)、GUIで使うTabler Iconsの表示は[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)にまとめています。X・Discordの公式プロジェクトではありません。ソフトウェアのライセンスとは別に、接続先サービスの利用条件も確認してください。
+[MIT](LICENSE)。Angelic-Angelの著作権・ライセンス表示は[連携の説明](integrations/README.md)と[Cloudflare版のNOTICE](cloudflare/NOTICE)、GUIで使うTabler Iconsなどの表示は[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)にまとめています。X・Discordの公式プロジェクトではありません。ソフトウェアのライセンスとは別に、接続先サービスの利用条件も確認してください。

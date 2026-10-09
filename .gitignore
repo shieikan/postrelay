@@ -20,3 +20,7 @@ connection.json
 *.key
 .env.*
 !.env.example
+node_modules/
+.wrangler/
+.dev.vars*
+.postrelay/

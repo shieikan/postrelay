@@ -1,0 +1,14 @@
+{
+  "feeds": [
+    {
+      "id": "example-feed",
+      "handle": "demo_studio",
+      "webhook_url": "https://discord.com/api/webhooks/123456789/example_replace_me",
+      "include": [],
+      "exclude": [],
+      "role_id": "",
+      "enabled": true,
+      "allow_unknown_kind": true
+    }
+  ]
+}
