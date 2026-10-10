@@ -84,7 +84,13 @@ export class Relay extends DurableObject {
           // return an actionable configuration error. Preserve the state instead.
           try {
             await this.load();
+            const resuming = !this.enabled;
             this.store.setMeta('enabled', true);
+            // A stopped installation may have refreshed its X credentials.
+            // Renew the upstream registration, retaining its endpoint and keys.
+            if (resuming && this.session?.registered) {
+              await this.saveSession({ ...this.session, registered: false }, this.generation);
+            }
             this.store.setMeta('source_paused', false);
             this.store.setMeta('last_error', '');
             // Do not bypass a persisted Mozilla backoff on repeated starts.

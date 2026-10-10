@@ -210,3 +210,13 @@ test('profile outage omits only the icon; verified posts still deliver', async t
   assert.deepEqual(state.unexpected, []);
   await command('stop');
 });
+
+test('stop and start re-registers an existing subscription with renewed X credentials', async t => {
+  const { command, ready, mockCommand, restart } = await runtime(t);
+  await command('start'); await ready();
+  await command('stop');
+  await restart({ X_AUTH_TOKEN: 'synthetic_renewed_cookie' });
+  await command('start'); await ready();
+  assert.equal((await mockCommand('state')).registrations.length, 1, 'resume must renew the X registration');
+  await command('stop');
+});
