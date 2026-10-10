@@ -1,7 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
-import { authorized, readConfig, RelayError, notificationCandidate, verifyNotification, enrichAuthor, matchesFeed, fingerprint, sendDiscord } from './core.js';
+import { authorized, readConfig, RelayError, notificationCandidate, enrichAuthor, matchesFeed, fingerprint, sendDiscord } from './core.js';
 import { generateKeys, decryptPush, seal, unseal, fromBase64 } from './crypto.js';
-import { openSocket, registerX, validateCookies, validateEndpoint, X_VAPID_KEY } from './upstream.js';
+import { openSocket, registerX, readPostNotifications, validateCookies, validateEndpoint, X_VAPID_KEY } from './upstream.js';
+import { notificationBatch, verifyCandidate } from './notifications.js';
 import { Store } from './store.js';
 
 const routes = new Map([['/api/status', 'GET'], ['/api/start', 'POST'], ['/api/stop', 'POST'], ['/api/retry', 'POST']]);
@@ -37,6 +38,7 @@ export class Relay extends DurableObject {
     this.lastMessageAt = 0;
     this.pingOutstanding = false;
     this.draining = false;
+    this.syncingNotifications = false;
     this.messages = Promise.resolve();
     this.pendingMessages = 0;
   }
@@ -61,6 +63,9 @@ export class Relay extends DurableObject {
       posts: this.store.counts('posts'), jobs: this.store.counts('jobs'),
       post_errors: this.store.errors('posts'), job_errors: this.store.errors('jobs'),
       last_error: this.store.meta('last_error', ''), last_received_at: this.store.meta('last_received_at'),
+      last_notification_sync_at: this.store.meta('last_notification_sync_at'),
+      next_notification_sync_at: this.store.meta('next_notification_sync_at', 0),
+      last_notification_sync_error: this.store.meta('last_notification_sync_error', ''),
       last_delivered_at: this.store.meta('last_delivered_at'), next_reconnect_at: this.store.meta('next_reconnect_at', 0) };
   }
 
@@ -152,6 +157,7 @@ export class Relay extends DurableObject {
         this.pingOutstanding = true;
         this.deadline = Date.now() + 10000;
       }
+      await this.syncNotifications();
       await this.drain();
     } catch (error) {
       const code = safeError(error);
@@ -173,6 +179,32 @@ export class Relay extends DurableObject {
     this.store.setMeta('source_paused', !retryable);
     this.store.setMeta('next_reconnect_at', Date.now() + (overrideDelay || Math.min(5000 * (2 ** Math.min(attempts - 1, 10)), 300000)));
     await this.schedule();
+  }
+
+  async syncNotifications() {
+    if (!this.enabled || this.syncingNotifications || !this.config.feeds.some(feed => feed.enabled && feed.include_reposts) ||
+      Date.now() < this.store.meta('next_notification_sync_at', 0)) return;
+    this.syncingNotifications = true;
+    const generation = this.generation;
+    const since = this.store.meta('notification_watermark', this.store.meta('last_received_at') ?? Date.now());
+    this.store.setMeta('notification_watermark', since);
+    this.store.setMeta('next_notification_sync_at', Date.now() + 300000);
+    try {
+      const value = await readPostNotifications(this.env);
+      if (!this.enabled || generation !== this.generation) return;
+      const batch = notificationBatch(value, this.config.feeds, since, Date.now());
+      for (const candidate of batch.candidates) this.store.accept(candidate, Date.now());
+      this.store.setMeta('notification_watermark', batch.watermark);
+      this.store.setMeta('last_notification_sync_at', Date.now());
+      this.store.setMeta('last_notification_sync_error', '');
+      await this.ctx.storage.sync();
+    } catch (error) {
+      if (!this.enabled || generation !== this.generation) return;
+      const code = safeError(error);
+      this.store.setMeta('last_notification_sync_error', code);
+      if (code === 'notification_sync_rate_limit' || code === 'x_auth_required')
+        this.store.setMeta('next_notification_sync_at', Date.now() + 1800000);
+    } finally { this.syncingNotifications = false; }
   }
 
   async connect() {
@@ -314,7 +346,7 @@ export class Relay extends DurableObject {
         const row = this.store.claimPost(Date.now());
         if (!row) break;
         try {
-          const post = await verifyNotification({ data: { url: row.url } }, this.config.feeds);
+          const post = await verifyCandidate(row, this.config.feeds);
           const targets = await Promise.all(this.config.feeds.filter(feed => matchesFeed(post, feed)).map(async feed => ({ id: feed.id, hash: await fingerprint(feed) })));
           const decorated = targets.length ? await enrichAuthor(post) : post;
           this.store.resolvePost(row, decorated, targets, Date.now());

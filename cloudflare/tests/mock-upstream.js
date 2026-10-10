@@ -9,7 +9,7 @@ export class Mock extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.state = { connections: 0, registrations: [], messages: [], acks: [], embedRequests: 0, discordRequests: 0,
-      profileRequests: 0, pendingEmbeds: 0, unexpected: [], options: {} };
+      profileRequests: 0, notificationRequests: 0, pendingEmbeds: 0, unexpected: [], options: {} };
     this.socket = null;
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS channel (id TEXT)');
     this.channel = ctx.storage.sql.exec('SELECT id FROM channel').toArray()[0]?.id;
@@ -55,6 +55,12 @@ export class Mock extends DurableObject {
     if (url.hostname === 'x.com' && url.pathname === '/i/api/1.1/notifications/settings/login.json') {
       state.registrations.push((await request.json()).push_device_info);
       return Response.json({}, { status: state.options.registrationStatus ?? 200 });
+    }
+    if (url.hostname === 'x.com' && url.pathname === '/i/api/2/notifications/device_follow.json') {
+      state.notificationRequests++;
+      if (state.options.holdNotifications) await new Promise(resolve => this.releases.push(resolve));
+      return Response.json(state.options.notifications ?? { globalObjects: { users: {}, tweets: {} }, timeline: { instructions: [] } },
+        { status: state.options.notificationStatus ?? 200 });
     }
     if (url.hostname === 'publish.x.com' && url.pathname === '/oembed') {
       state.embedRequests++;

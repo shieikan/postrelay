@@ -4,6 +4,11 @@ export default worker;
 export class TestRelay extends Relay {
   async fetch(request) {
     const path = new URL(request.url).pathname;
+    if (path === '/__test/sync-due') {
+      this.store.setMeta('next_notification_sync_at', 0);
+      await this.tick();
+      return Response.json({ ok: true });
+    }
     if (path === '/__test/due') {
       this.store.sql.exec("UPDATE posts SET next_at = 0, lease_until = 0 WHERE state IN ('queued','retry','sending')");
       this.store.sql.exec("UPDATE jobs SET next_at = 0, lease_until = 0 WHERE state IN ('queued','retry','sending')");

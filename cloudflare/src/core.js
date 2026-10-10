@@ -8,7 +8,7 @@ const fail = (code = 'invalid_config') => { throw new RelayError(code); };
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const handlePattern = /^[a-zA-Z0-9_]{1,15}$/;
 const idPattern = /^[a-zA-Z0-9_-]{1,32}$/;
-const feedFields = new Set(['id', 'handle', 'webhook_url', 'include', 'exclude', 'role_id', 'enabled', 'allow_unknown_kind']);
+const feedFields = new Set(['id', 'handle', 'webhook_url', 'include', 'exclude', 'role_id', 'enabled', 'allow_unknown_kind', 'include_reposts']);
 
 export function validateWebhook(value) {
   // Validate the raw input: URL normalisation can hide an explicit port or dot segments.
@@ -30,14 +30,16 @@ export function readConfig(raw) {
     if (!object(feed) || Object.keys(feed).some(key => !feedFields.has(key)) ||
       typeof feed.id !== 'string' || !idPattern.test(feed.id) || ids.has(feed.id) ||
       typeof feed.handle !== 'string' || !handlePattern.test(feed.handle) ||
-      feed.allow_unknown_kind !== true || typeof feed.enabled !== 'boolean') fail();
+      feed.allow_unknown_kind !== true || typeof feed.enabled !== 'boolean' ||
+      (feed.include_reposts !== undefined && typeof feed.include_reposts !== 'boolean')) fail();
     ids.add(feed.id);
     const include = words(feed.include ?? []), exclude = words(feed.exclude ?? []);
     if (include.length + exclude.length > 100) fail();
     const role = feed.role_id ?? '';
     if (typeof role !== 'string' || (role && !/^[0-9]{1,24}$/.test(role))) fail();
     return { id: feed.id, handle: feed.handle.toLowerCase(), webhook_url: validateWebhook(feed.webhook_url),
-      include, exclude, role_id: role, enabled: feed.enabled, allow_unknown_kind: true };
+      include, exclude, role_id: role, enabled: feed.enabled, allow_unknown_kind: true,
+      ...(feed.include_reposts !== undefined ? { include_reposts: feed.include_reposts } : {}) };
   });
   return { feeds };
 }
@@ -137,9 +139,10 @@ export async function resolvePublicAuthor(id) {
 
 export async function enrichAuthor(post, resolver = resolvePublicAuthor) {
   try {
-    const evidence = await resolver(post.id);
+    const originalId = post.original_id ?? post.id;
+    const evidence = await resolver(originalId);
     const user = evidence?.user;
-    if (!object(evidence) || evidence.__typename !== 'Tweet' || evidence.id_str !== post.id ||
+    if (!object(evidence) || evidence.__typename !== 'Tweet' || evidence.id_str !== originalId ||
       !object(user) || typeof user.screen_name !== 'string' ||
       user.screen_name.toLowerCase() !== post.author ||
       typeof user.id_str !== 'string' || !/^[0-9]{1,19}$/.test(user.id_str) || /\s/.test(user.id_str)) return post;
@@ -154,7 +157,8 @@ export async function enrichAuthor(post, resolver = resolvePublicAuthor) {
 }
 
 export function matchesFeed(post, feed) {
-  if (!feed.enabled || post.author !== feed.handle || !feed.allow_unknown_kind) return false;
+  if (!feed.enabled || !feed.allow_unknown_kind) return false;
+  if (post.reposted_by ? (!feed.include_reposts || post.reposted_by !== feed.handle) : post.author !== feed.handle) return false;
   const text = post.text.toLowerCase();
   if (feed.exclude.some(word => text.includes(word.toLowerCase()))) return false;
   return !feed.include.length || feed.include.some(word => text.includes(word.toLowerCase()));
@@ -165,7 +169,7 @@ export function discordMessage(post, feed) {
   const author = { name: name ? `${name} (@${post.author})` : '@' + post.author,
     url: `https://x.com/${post.author}`, ...(icon ? { icon_url: icon } : {}) };
   const message = { embeds: [{ author, title: '@' + post.author, description: post.text.slice(0, 4000),
-    url: post.url, color: 13981467, footer: { text: 'PostRelay · 投稿通知' } }], allowed_mentions: { parse: [] } };
+    url: post.url, color: 13981467, footer: { text: post.reposted_by ? `@${post.reposted_by} がリポスト · PostRelay` : 'PostRelay · 投稿通知' } }], allowed_mentions: { parse: [] } };
   if (feed.role_id) { message.content = `<@&${feed.role_id}>`; message.allowed_mentions.roles = [feed.role_id]; }
   return message;
 }

@@ -13,6 +13,9 @@ const messages = {
   unauthorized: 'ローカル設定とWorkerの ADMIN_TOKEN が一致するか確認してください。',
   service_unavailable: 'Cloudflareの稼働状況と無料枠の使用量を確認してください。',
   x_auth_required: 'Xの接続認証が必要です。同じアカウントのCookieを更新して、secrets、start の順に実行してください。',
+  notification_sync_invalid: 'Xの投稿通知一覧の形式を確認できませんでした。照合位置を更新せず再試行します。',
+  notification_sync_rate_limit: 'Xの投稿通知一覧の取得制限です。30分後に再試行します。',
+  notification_sync_unavailable: 'Xの投稿通知一覧を取得できませんでした。次の照合で再試行します。',
   x_registration_rejected: 'Xが通知登録を受け付けませんでした。Xの通知設定と接続方式の対応状況を確認してください。',
   x_registration_unavailable: 'Xの通知登録を再試行します。',
   push_server_backoff: '通知サーバーから30分の待機を指定されています。',
@@ -42,7 +45,7 @@ export function statusView(value) {
   const result = {};
   if (!value || typeof value !== 'object') return result;
   for (const field of ['enabled', 'connected', 'source_paused', 'registered']) if (typeof value[field] === 'boolean') result[field] = value[field];
-  for (const field of ['last_received_at', 'last_delivered_at', 'next_reconnect_at']) if (Number.isSafeInteger(value[field]) || value[field] === null) result[field] = value[field];
+  for (const field of ['last_received_at', 'last_delivered_at', 'next_reconnect_at', 'last_notification_sync_at', 'next_notification_sync_at']) if (Number.isSafeInteger(value[field]) || value[field] === null) result[field] = value[field];
   for (const field of ['posts', 'jobs']) {
     if (value[field] && typeof value[field] === 'object') result[field] = Object.fromEntries(
       ['queued', 'retry', 'sending', 'resolved', 'ignored', 'delivered', 'failed', 'cancelled']
@@ -53,5 +56,6 @@ export function statusView(value) {
       Object.entries(value[field]).filter(([code, count]) => known(code) && Number.isSafeInteger(count)));
   }
   if (value.last_error === '' || known(value.last_error)) result.last_error = value.last_error;
+  if (value.last_notification_sync_error === '' || known(value.last_notification_sync_error)) result.last_notification_sync_error = value.last_notification_sync_error;
   return result;
 }

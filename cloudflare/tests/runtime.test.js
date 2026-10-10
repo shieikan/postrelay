@@ -220,3 +220,71 @@ test('stop and start re-registers an existing subscription with renewed X creden
   assert.equal((await mockCommand('state')).registrations.length, 1, 'resume must renew the X registration');
   await command('stop');
 });
+
+function repostNotification(timestamp = Date.now() + 1000) {
+  return { globalObjects: { users: {
+    '10': { id_str: '10', screen_name: 'demo_studio', protected: false },
+    '20': { id_str: '20', screen_name: 'original', protected: false },
+  }, tweets: { '100': { id_str: '100', user_id_str: '10', retweeted_status_id_str: '90', full_text: 'PRIVATE API BODY' },
+    '90': { id_str: '90', user_id_str: '20', full_text: 'PRIVATE ORIGINAL' } } },
+  timeline: { instructions: [{ addEntries: { entries: [{ entryId: 'tweet-100', sortIndex: String(timestamp),
+    content: { item: { content: { tweet: { id: '100' } } } } }] } }] } };
+}
+const originalEmbed = { type: 'rich', url: 'https://x.com/original/status/90', author_url: 'https://x.com/original',
+  author_name: 'Original Person', html: '<blockquote><p>Verified original</p>footer</blockquote>' };
+
+test('opt-in notification reconciliation delivers attributed reposts and deduplicates across restart', async t => {
+  const { command, ready, mockCommand, inspect, restart } = await runtime(t, {
+    POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts: true }] }),
+  });
+  const notifications = repostNotification();
+  await mockCommand('options', { notifications, embedBody: originalEmbed });
+  await command('start'); await ready();
+  const state = await waitFor(() => mockCommand('state'), value => value.messages.length === 1, 'public repost must deliver');
+  assert.equal(state.messages[0].embeds[0].url, originalEmbed.url);
+  assert.equal(state.messages[0].embeds[0].author.name, 'Original Person (@original)');
+  assert.match(state.messages[0].embeds[0].footer.text, /@demo_studio.*リポスト/);
+  assert.doesNotMatch(JSON.stringify(await inspect()), /PRIVATE/);
+  await command('start');
+  assert.equal((await mockCommand('state')).notificationRequests, 1, 'repeated starts do not poll continuously');
+  await inspect('sync-due');
+  assert.equal((await mockCommand('state')).messages.length, 1);
+  await command('stop'); await restart();
+  await mockCommand('options', { notifications, embedBody: originalEmbed });
+  await command('start'); await ready(); await inspect('sync-due');
+  assert.equal((await mockCommand('state')).messages.length, 0, 'persisted event must not be sent again');
+  assert.equal((await command('status')).value.last_notification_sync_error, '');
+  await command('stop');
+});
+
+test('notification failures preserve checkpoint and stop during lookup prevents ingestion', async t => {
+  const { command, ready, mockCommand, inspect } = await runtime(t, {
+    POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts: true }] }),
+  });
+  await mockCommand('options', { notificationStatus: 429 });
+  await command('start'); await ready();
+  const status = await waitFor(() => command('status'), value => value.value.last_notification_sync_error === 'notification_sync_rate_limit', '429 must be visible');
+  assert.ok(status.value.next_notification_sync_at > Date.now() + 14 * 60000);
+  await mockCommand('options', { notificationStatus: 200, notifications: repostNotification(), holdNotifications: true });
+  const syncing = inspect('sync-due');
+  await waitFor(() => mockCommand('state'), value => value.notificationRequests === 2, 'lookup should be in flight');
+  await command('stop'); await mockCommand('release'); await syncing;
+  assert.equal((await inspect()).posts.length, 0);
+  assert.equal((await mockCommand('state')).messages.length, 0);
+});
+
+test('a rejected raw push can later be recovered with confirmed repost attribution', async t => {
+  const { command, ready, mockCommand, inspect, emit } = await runtime(t, {
+    POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts: true }] }),
+  });
+  await mockCommand('options', { embedBody: originalEmbed });
+  await command('start'); await ready();
+  await waitFor(() => command('status'), value => value.value.last_notification_sync_at !== null, 'initial sync should finish');
+  await emit('100');
+  await waitFor(() => inspect(), value => value.posts[0]?.state === 'ignored', 'raw wrapper cannot prove the original');
+  await mockCommand('options', { notifications: repostNotification() });
+  await inspect('sync-due');
+  await waitFor(() => mockCommand('state'), value => value.messages.length === 1, 'confirmed relationship must recover the rejected push');
+  assert.equal((await inspect()).posts[0].reposted_by, 'demo_studio');
+  await command('stop');
+});

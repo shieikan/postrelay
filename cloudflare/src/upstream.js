@@ -64,3 +64,24 @@ export async function registerX(session, env) {
     throw new RelayError('x_registration_unavailable', true);
   }
 }
+
+export async function readPostNotifications(env) {
+  validateCookies(env);
+  try {
+    const response = await fetch('https://x.com/i/api/2/notifications/device_follow.json?count=20&tweet_mode=extended', {
+      redirect: 'manual', signal: AbortSignal.timeout(10000),
+      headers: { Authorization: X_PUBLIC_BEARER, 'x-csrf-token': env.X_CSRF_TOKEN, 'x-twitter-auth-type': 'OAuth2Session',
+        'x-twitter-active-user': 'yes', Referer: 'https://x.com/', 'User-Agent': 'Mozilla/5.0',
+        Cookie: `auth_token=${env.X_AUTH_TOKEN}; ct0=${env.X_CSRF_TOKEN}` },
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new RelayError(response.status === 401 || response.status === 403 ? 'x_auth_required' :
+        response.status === 429 ? 'notification_sync_rate_limit' : 'notification_sync_unavailable', true);
+    }
+    return await readBoundedJson(response, 1048576);
+  } catch (error) {
+    if (error instanceof RelayError) throw error;
+    throw new RelayError('notification_sync_unavailable', true);
+  }
+}

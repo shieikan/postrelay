@@ -20,7 +20,7 @@ async function main() {
   // Print only the documented status fields, never an arbitrary response body.
   const result = statusView(value);
   console.log(JSON.stringify(result, null, 2));
-  const codes = new Set([result.last_error, ...Object.keys(result.post_errors ?? {}), ...Object.keys(result.job_errors ?? {})].filter(Boolean));
+  const codes = new Set([result.last_error, result.last_notification_sync_error, ...Object.keys(result.post_errors ?? {}), ...Object.keys(result.job_errors ?? {})].filter(Boolean));
   for (const code of codes) console.error(errorText(code));
 }
 main().catch(error => { console.error(errorText(error?.code ?? error?.message)); process.exitCode = 1; });

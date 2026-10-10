@@ -8,7 +8,8 @@
       "exclude": [],
       "role_id": "",
       "enabled": true,
-      "allow_unknown_kind": true
+      "allow_unknown_kind": true,
+      "include_reposts": false
     }
   ]
 }

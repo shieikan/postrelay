@@ -15,6 +15,8 @@ export class Store {
       lease TEXT, lease_until INTEGER, error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS posts_due ON posts(state, next_at)`);
+    if (!this.sql.exec('PRAGMA table_info(posts)').toArray().some(column => column.name === 'reposted_by'))
+      this.sql.exec('ALTER TABLE posts ADD COLUMN reposted_by TEXT');
     this.sql.exec(`CREATE TABLE IF NOT EXISTS jobs (
       id TEXT PRIMARY KEY, post_id TEXT NOT NULL, feed_id TEXT NOT NULL, destination_hash TEXT NOT NULL,
       state TEXT NOT NULL DEFAULT 'queued', attempts INTEGER NOT NULL DEFAULT 0,
@@ -32,11 +34,21 @@ export class Store {
   }
   accept(candidate, now) {
     return this.storage.transactionSync(() => {
-      if (this.sql.exec('SELECT id FROM posts WHERE id = ?', candidate.id).toArray().length) return false;
+      const existing = this.sql.exec('SELECT state, reposted_by FROM posts WHERE id = ?', candidate.id).toArray()[0];
+      // A raw push may arrive before the authenticated repost relationship.
+      // Upgrade that unresolved candidate instead of permanently losing it.
+      const upgrade = existing && candidate.reposted_by && !existing.reposted_by && existing.state !== 'resolved' &&
+        !this.sql.exec('SELECT id FROM jobs WHERE post_id = ? LIMIT 1', candidate.id).toArray().length;
+      if (existing && !upgrade) return false;
       const pending = this.sql.exec("SELECT count(*) AS n FROM posts WHERE state IN ('queued','retry','sending')").one().n;
-      if (pending >= PENDING_LIMIT) throw new RelayError('queue_full', true);
-      this.sql.exec('INSERT INTO posts(id, url, next_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-        candidate.id, candidate.url, now, now, now);
+      if (pending >= PENDING_LIMIT && !(upgrade && ['queued', 'retry', 'sending'].includes(existing.state))) throw new RelayError('queue_full', true);
+      if (upgrade) {
+        this.sql.exec("UPDATE posts SET url = ?, reposted_by = ?, state = 'queued', attempts = 0, next_at = ?, updated_at = ?, lease = NULL, lease_until = NULL, error = '' WHERE id = ?",
+          candidate.url, candidate.reposted_by, now, now, candidate.id);
+      } else {
+        this.sql.exec('INSERT INTO posts(id, url, reposted_by, next_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          candidate.id, candidate.url, candidate.reposted_by ?? null, now, now, now);
+      }
       this.setMeta('last_received_at', now);
       return true;
     });

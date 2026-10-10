@@ -125,8 +125,8 @@ Wrangler instead of removing it to match a transitive version range.
 The exposed assets are management authority, X cookies, Discord webhooks,
 subscription private keys and queued delivery state. This is a trusted-operator
 deployment. HTTPS endpoints are fixed or strictly allowlisted; redirects are
-not followed. SQL values are bound parameters. Only canonical candidate URLs
-and independently confirmed public text enter queue storage. Raw push bodies and
+not followed. SQL values are bound parameters. Only canonical candidate URLs,
+IDs, confirmed repost actor handles and independently confirmed public text enter queue storage. Raw push bodies and
 titles never enter jobs, status responses or application logs.
 
 The subscription is encrypted and authenticated with AES-256-GCM, a fresh random
@@ -156,3 +156,31 @@ or accesses live service credentials.
 Eligible posts retain the validated public oEmbed display name. A best-effort, unauthenticated request to X's public syndication endpoint adds the matching top-level author's ID and profile image. The response is capped at 64 KiB and 2.5 seconds; redirects, mismatched IDs/handles, tombstones, and non-profile CDN image URLs are rejected. Metadata failure does not change public-post eligibility or block delivery. No push body/title/icon is used. Saved posts without metadata still render.
 
 The metadata snapshot follows the existing post retention policy and is reused for multiple destinations and retries. It is not a current-profile cache, permanent identity tracker, or replacement for the configured handle allowlist. See NOTICE for the react-tweet token calculation attribution.
+
+## Optional repost reconciliation
+
+An enabled feed with `include_reposts: true` activates one shared, authenticated
+GET of X's device-follow notification timeline every five minutes. The request
+uses only the fixed `x.com` endpoint, a ten-second timeout, no redirects and a
+1 MiB response cap. This is an undocumented browser endpoint, not a stable API.
+An authentication failure or rate limit postpones reconciliation for 30 minutes;
+the independent Web Push connection is unchanged. Separate status fields report
+the last successful reconciliation, error and next attempt.
+
+Only top-level notification entries establish candidates. The wrapper user ID
+must resolve to a public configured account, and its explicit retweeted-status
+ID must resolve to the public original author. Nested quotes and unconfigured
+actors do not confer eligibility. The original ID/author/content must then pass
+unauthenticated oEmbed verification. Raw authenticated timeline text is discarded.
+Discord displays the original author's name/icon with a separate repost actor.
+
+The latest 20 entries are checked without pagination. Existing installations
+start from their last accepted notification timestamp; new installations start
+from the first reconciliation time. The persisted millisecond boundary is
+inclusive; wrapper IDs deduplicate repeated results and distinguish different
+accounts reposting the same original. A previously rejected raw-push wrapper can
+be upgraded by a confirmed relationship. Normal post candidates use the existing
+post IDs. Read errors and stopped generations do not advance the checkpoint.
+This recovers recent notification gaps, not arbitrary historical posts or every
+event during an extended outage. The optional actor column is a nullable additive
+SQLite migration; older records retain their original behavior.
