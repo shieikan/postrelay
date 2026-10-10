@@ -58,7 +58,7 @@ docker compose up --build -d --wait
 
 Workersと1つのDurable Objectで受信と配信を動かす構成です。常時起動するMacやVMは不要で、自分のCloudflareアカウント・通知用Xアカウント・Discord Webhookを使います。複数の投稿者とチャンネルを設定できます。GUIはなく、設定・停止・再開・再送は端末で操作します。
 
-[Cloudflare導入ガイド](docs/cloudflare.md)に、無料枠の概算、必要な接続情報、導入コマンド、保存・復旧の手順をまとめています。Angelic-Angelの通知受信処理をWorkers向けに移植し、ローカルで受信・公開確認・再送・再起動後の復旧を検証しました。Cloudflare版では、`include_reposts` を有効にすると投稿通知一覧を約5分ごとに照合し、監視対象によるリポストも元投稿の公開確認後に転送します。長期の安定運転や通知の全件取得は保証しません。
+[Cloudflare導入ガイド](docs/cloudflare.md)に、無料枠の概算、必要な接続情報、導入コマンド、保存・復旧の手順をまとめています。Angelic-Angelの通知受信処理をWorkers向けに移植し、ローカルで受信・公開確認・再送・再起動後の復旧を検証しました。Cloudflare版では、`include_reposts` を有効にするとプッシュを受けたときに投稿通知一覧を照合し、監視対象によるリポストも元投稿の公開確認後に転送します。長期の安定運転や通知の全件取得は保証しません。
 
 ## 接続せずにGUIを試す
 

@@ -35,6 +35,7 @@ test('setup creates independent tokens and a protected operator file; never over
 
 test('control prints only known status fields and error codes', () => {
   const result = statusView({ enabled: true, token: 'PRIVATE_TOKEN', last_error: 'PRIVATE_TOKEN',
+    notification_mode: 'PRIVATE_TOKEN', last_push_result: 'PRIVATE_TOKEN', x_registration: { tweets: 'PRIVATE_TOKEN' },
     jobs: { failed: 1, PRIVATE_TOKEN: 20 }, post_errors: { public_lookup_failed: 2, PRIVATE_TOKEN: 1 } });
   assert.deepEqual(result, { enabled: true, jobs: { failed: 1 }, post_errors: { public_lookup_failed: 2 } });
   assert.doesNotMatch(errorText('PRIVATE_TOKEN'), /PRIVATE_TOKEN/);

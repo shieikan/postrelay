@@ -63,8 +63,14 @@ export class Relay extends DurableObject {
       posts: this.store.counts('posts'), jobs: this.store.counts('jobs'),
       post_errors: this.store.errors('posts'), job_errors: this.store.errors('jobs'),
       last_error: this.store.meta('last_error', ''), last_received_at: this.store.meta('last_received_at'),
+      push_received: this.store.meta('push_received', 0),
+      last_push_at: this.store.meta('last_push_at'),
+      last_push_result: this.store.meta('last_push_result', ''),
+      last_socket_close_code: this.store.meta('last_socket_close_code'),
+      x_registration: this.store.meta('x_registration'),
+      notification_mode: 'push_only',
       last_notification_sync_at: this.store.meta('last_notification_sync_at'),
-      next_notification_sync_at: this.store.meta('next_notification_sync_at', 0),
+      next_notification_sync_at: this.store.meta('notification_lookup_pending', false) ? this.store.meta('next_notification_sync_at', 0) : 0,
       last_notification_sync_error: this.store.meta('last_notification_sync_error', ''),
       last_delivered_at: this.store.meta('last_delivered_at'), next_reconnect_at: this.store.meta('next_reconnect_at', 0) };
   }
@@ -130,6 +136,7 @@ export class Relay extends DurableObject {
     const due = this.store.nextDue();
     if (due !== null) times.push(due);
     if (this.deadline !== null) times.push(this.deadline);
+    if (this.store.meta('notification_lookup_pending', false)) times.push(this.store.meta('next_notification_sync_at', 0));
     if (!this.socket && !this.connecting && !this.store.meta('source_paused', false)) times.push(this.store.meta('next_reconnect_at', 0));
     const next = Math.max(now + 1000, Math.min(...times));
     const current = await this.ctx.storage.getAlarm();
@@ -181,14 +188,29 @@ export class Relay extends DurableObject {
     await this.schedule();
   }
 
+  requestNotificationLookup() {
+    if (!this.config.feeds.some(feed => feed.enabled && feed.include_reposts)) return;
+    this.store.setMeta('notification_lookup_sequence', this.store.meta('notification_lookup_sequence', 0) + 1);
+    if (this.store.meta('notification_lookup_pending', false)) return;
+    if (this.store.meta('notification_watermark') === null)
+      this.store.setMeta('notification_watermark', this.store.meta('last_received_at') ?? Date.now() - 300000);
+    this.store.setMeta('notification_lookup_pending', true);
+    this.store.setMeta('notification_lookup_attempts', 0);
+  }
+
   async syncNotifications() {
-    if (!this.enabled || this.syncingNotifications || !this.config.feeds.some(feed => feed.enabled && feed.include_reposts) ||
+    if (!this.config.feeds.some(feed => feed.enabled && feed.include_reposts)) {
+      this.store.setMeta('notification_lookup_pending', false);
+      return;
+    }
+    if (!this.enabled || !this.store.meta('notification_lookup_pending', false) || this.syncingNotifications || !this.config.feeds.some(feed => feed.enabled && feed.include_reposts) ||
       Date.now() < this.store.meta('next_notification_sync_at', 0)) return;
     this.syncingNotifications = true;
+    const sequence = this.store.meta('notification_lookup_sequence', 0);
     const generation = this.generation;
     const since = this.store.meta('notification_watermark', this.store.meta('last_received_at') ?? Date.now());
     this.store.setMeta('notification_watermark', since);
-    this.store.setMeta('next_notification_sync_at', Date.now() + 300000);
+    this.store.setMeta('next_notification_sync_at', 0);
     try {
       const value = await readPostNotifications(this.env);
       if (!this.enabled || generation !== this.generation) return;
@@ -197,13 +219,17 @@ export class Relay extends DurableObject {
       this.store.setMeta('notification_watermark', batch.watermark);
       this.store.setMeta('last_notification_sync_at', Date.now());
       this.store.setMeta('last_notification_sync_error', '');
+      this.store.setMeta('notification_lookup_pending', this.store.meta('notification_lookup_sequence', 0) !== sequence);
       await this.ctx.storage.sync();
     } catch (error) {
       if (!this.enabled || generation !== this.generation) return;
       const code = safeError(error);
       this.store.setMeta('last_notification_sync_error', code);
-      if (code === 'notification_sync_rate_limit' || code === 'x_auth_required')
-        this.store.setMeta('next_notification_sync_at', Date.now() + 1800000);
+      const attempts = this.store.meta('notification_lookup_attempts', 0) + 1;
+      this.store.setMeta('notification_lookup_attempts', attempts);
+      this.store.setMeta('notification_lookup_pending', attempts < 8);
+      this.store.setMeta('next_notification_sync_at', Date.now() +
+        (code === 'notification_sync_rate_limit' || code === 'x_auth_required' ? 1800000 : Math.min(5000 * 2 ** attempts, 300000)));
     } finally { this.syncingNotifications = false; }
   }
 
@@ -235,6 +261,7 @@ export class Relay extends DurableObject {
         this.ctx.waitUntil(task);
       });
       socket.addEventListener('close', event => {
+        if (generation === this.generation) this.store.setMeta('last_socket_close_code', event.code);
         if (generation === this.generation && this.enabled) this.ctx.waitUntil(this.connectionFailed(
           event.code === 4774 ? 'push_server_backoff' : 'push_disconnected', true, event.code === 4774 ? 1800000 : 0));
       });
@@ -262,8 +289,9 @@ export class Relay extends DurableObject {
   async completeRegistration(generation) {
     this.phase = 'x_registration';
     this.deadline = Date.now() + 15000;
-    await registerX(this.session, this.env);
+    const registration = await registerX(this.session, this.env);
     if (generation !== this.generation || !this.enabled) return;
+    this.store.setMeta('x_registration', registration);
     if (!await this.saveSession({ ...this.session, registered: true }, generation)) return;
     this.ready();
   }
@@ -307,25 +335,42 @@ export class Relay extends DurableObject {
     } else if (message.messageType === 'notification') {
       if (this.phase !== 'ready' || !sameChannel(message.channelID, this.session.channelId) ||
         typeof message.version !== 'string' || message.version.length < 1 || message.version.length > 256) throw new RelayError('push_protocol_error', true);
+      this.store.setMeta('push_received', this.store.meta('push_received', 0) + 1);
+      this.store.setMeta('last_push_at', Date.now());
+      this.store.setMeta('last_push_result', 'empty');
       let ack = 100;
       if (message.data) {
         try {
           const plain = await decryptPush(message.data, message.headers, this.session.keys);
           let payload;
           try { payload = JSON.parse(plain); } catch { throw new RelayError('not_public_post'); }
-          const candidate = notificationCandidate(payload, this.config.feeds);
           if (generation !== this.generation || !this.enabled) return;
-          // Only the canonical candidate URL survives. Private push bodies/titles
-          // are neither stored nor included in jobs, status, logs or responses.
-          this.store.accept(candidate, Date.now());
-          await this.ctx.storage.sync();
+          // A push is the only trigger for a bounded relationship lookup.
+          // A DM or arbitrary link cannot cause an authenticated timeline read.
+          let candidate;
+          try { candidate = notificationCandidate(payload, this.config.feeds); }
+          catch (error) {
+            const link = payload?.data?.url ?? payload?.data?.uri;
+            if (typeof link === 'string' && /^(?:https:\/\/(?:x|twitter)\.com)?\/i\/notifications(?:\?.*)?$/.test(link)) {
+              this.requestNotificationLookup();
+              this.store.setMeta('last_push_result', 'notification_list');
+            } else throw error;
+          }
+          if (candidate) {
+            // Only the canonical candidate URL survives. Private push bodies/titles
+            // are neither stored nor included in jobs, status, logs or responses.
+            this.requestNotificationLookup();
+            this.store.accept(candidate, Date.now());
+            this.store.setMeta('last_push_result', 'accepted');
+          }
         } catch (error) {
-          if (error instanceof RelayError && error.code === 'invalid_ciphertext') { ack = 101; this.store.setMeta('last_error', 'invalid_ciphertext'); }
-          else if (error instanceof RelayError && !error.retryable) ack = 100; // permanently ineligible content
+          if (error instanceof RelayError && error.code === 'invalid_ciphertext') { ack = 101; this.store.setMeta('last_error', 'invalid_ciphertext'); this.store.setMeta('last_push_result', 'invalid_ciphertext'); }
+          else if (error instanceof RelayError && !error.retryable) { ack = 100; this.store.setMeta('last_push_result', safeError(error)); } // permanently ineligible content
           else throw error; // no ACK until the canonical candidate is durable
         }
       }
       if (generation !== this.generation || !this.enabled) return;
+      await this.ctx.storage.sync();
       this.socket.send(JSON.stringify({ messageType: 'ack', updates: [{ channelID: message.channelID, version: message.version, code: ack }] }));
       this.ctx.waitUntil(this.drainAndSchedule());
     }
@@ -333,7 +378,7 @@ export class Relay extends DurableObject {
   }
 
   async drainAndSchedule() {
-    try { await this.drain(); }
+    try { await this.syncNotifications(); await this.drain(); }
     catch (error) { this.store.setMeta('last_error', safeError(error)); }
     finally { await this.schedule(); }
   }

@@ -160,7 +160,7 @@ The metadata snapshot follows the existing post retention policy and is reused f
 ## Optional repost reconciliation
 
 An enabled feed with `include_reposts: true` activates one shared, authenticated
-GET of X's device-follow notification timeline every five minutes. The request
+GET of X's device-follow notification timeline only when a post or notification-list push arrives. Startup, reconnect and idle alarms never initiate a lookup. The request
 uses only the fixed `x.com` endpoint, a ten-second timeout, no redirects and a
 1 MiB response cap. This is an undocumented browser endpoint, not a stable API.
 An authentication failure or rate limit postpones reconciliation for 30 minutes;
@@ -176,11 +176,11 @@ Discord displays the original author's name/icon with a separate repost actor.
 
 The latest 20 entries are checked without pagination. Existing installations
 start from their last accepted notification timestamp; new installations start
-from the first reconciliation time. The persisted millisecond boundary is
+with a five-minute overlap at the first push. The persisted millisecond boundary is
 inclusive; wrapper IDs deduplicate repeated results and distinguish different
 accounts reposting the same original. A previously rejected raw-push wrapper can
 be upgraded by a confirmed relationship. Normal post candidates use the existing
 post IDs. Read errors and stopped generations do not advance the checkpoint.
-This recovers recent notification gaps, not arbitrary historical posts or every
+Push-triggered lookup work is persisted before ACK and retried up to eight times on failure. No recurring timeline polling runs after that work completes. This recovers recent notification gaps, not arbitrary historical posts or every
 event during an extended outage. The optional actor column is a nullable additive
 SQLite migration; older records retain their original behavior.

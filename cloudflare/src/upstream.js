@@ -59,6 +59,7 @@ export async function registerX(session, env) {
     }
     const value = await readBoundedJson(response);
     if (!value || typeof value !== 'object' || Array.isArray(value) || value.errors || value.error) throw new RelayError('x_registration_rejected');
+    return { settings_present: !!value.push_settings, tweets: ['on', 'off'].includes(value.push_settings?.TweetsSetting) ? value.push_settings.TweetsSetting : 'unknown' };
   } catch (error) {
     if (error instanceof RelayError) throw error;
     throw new RelayError('x_registration_unavailable', true);

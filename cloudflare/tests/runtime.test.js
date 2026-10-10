@@ -221,7 +221,7 @@ test('stop and start re-registers an existing subscription with renewed X creden
   await command('stop');
 });
 
-function repostNotification(timestamp = Date.now() + 1000) {
+function repostNotification(timestamp = Date.now() - 1000) {
   return { globalObjects: { users: {
     '10': { id_str: '10', screen_name: 'demo_studio', protected: false },
     '20': { id_str: '20', screen_name: 'original', protected: false },
@@ -233,58 +233,85 @@ function repostNotification(timestamp = Date.now() + 1000) {
 const originalEmbed = { type: 'rich', url: 'https://x.com/original/status/90', author_url: 'https://x.com/original',
   author_name: 'Original Person', html: '<blockquote><p>Verified original</p>footer</blockquote>' };
 
-test('opt-in notification reconciliation delivers attributed reposts and deduplicates across restart', async t => {
-  const { command, ready, mockCommand, inspect, restart } = await runtime(t, {
+test('only a received push triggers repost lookup and persisted deduplication', async t => {
+  const { command, ready, mockCommand, inspect, emit } = await runtime(t, {
     POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts: true }] }),
   });
-  const notifications = repostNotification();
-  await mockCommand('options', { notifications, embedBody: originalEmbed });
+  await mockCommand('options', { notifications: repostNotification(), embedBody: originalEmbed });
   await command('start'); await ready();
-  const state = await waitFor(() => mockCommand('state'), value => value.messages.length === 1, 'public repost must deliver');
+  assert.equal((await mockCommand('state')).notificationRequests, 0);
+  await emit('100', { uri: '/i/notifications' });
+  const state = await waitFor(() => mockCommand('state'), value => value.messages.length === 1, 'push-triggered public repost must deliver');
   assert.equal(state.messages[0].embeds[0].url, originalEmbed.url);
-  assert.equal(state.messages[0].embeds[0].author.name, 'Original Person (@original)');
   assert.match(state.messages[0].embeds[0].footer.text, /@demo_studio.*リポスト/);
-  assert.doesNotMatch(JSON.stringify(await inspect()), /PRIVATE/);
-  await command('start');
-  assert.equal((await mockCommand('state')).notificationRequests, 1, 'repeated starts do not poll continuously');
-  await inspect('sync-due');
+  await emit('100', { uri: '/i/notifications', version: 'again' });
+  await waitFor(() => mockCommand('state'), value => value.acks.length === 2, 'both pushes should be acknowledged');
   assert.equal((await mockCommand('state')).messages.length, 1);
-  await command('stop'); await restart();
-  await mockCommand('options', { notifications, embedBody: originalEmbed });
-  await command('start'); await ready(); await inspect('sync-due');
-  assert.equal((await mockCommand('state')).messages.length, 0, 'persisted event must not be sent again');
-  assert.equal((await command('status')).value.last_notification_sync_error, '');
+  const status = (await command('status')).value;
+  assert.equal(status.push_received, 2);
+  assert.equal(status.last_push_result, 'notification_list');
+  assert.doesNotMatch(JSON.stringify(await inspect()), /PRIVATE/);
   await command('stop');
 });
 
-test('notification failures preserve checkpoint and stop during lookup prevents ingestion', async t => {
+test('DM pushes do not trigger timeline reads and diagnostics retain no payload', async t => {
+  const { command, ready, mockCommand, inspect, emit } = await runtime(t, {
+    POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts: true }] }),
+  });
+  await command('start'); await ready();
+  await emit('100', { uri: '/messages/123' });
+  await waitFor(() => mockCommand('state'), value => value.acks.length === 1, 'private push should be acknowledged');
+  assert.equal((await mockCommand('state')).notificationRequests, 0);
+  const status = (await command('status')).value;
+  assert.equal(status.push_received, 1);
+  assert.ok(status.last_push_at > 0);
+  assert.doesNotMatch(JSON.stringify(await inspect()), /PRIVATE|messages\/123/);
+  await command('stop');
+});
+
+test('push-only mode never reads the X timeline on start or recovery alarms', async t => {
   const { command, ready, mockCommand, inspect } = await runtime(t, {
+    POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts: true }] }),
+  });
+  await command('start'); await ready();
+  await inspect('sync-due');
+  await command('start'); await inspect('due');
+  assert.equal((await mockCommand('state')).notificationRequests, 0);
+  await command('stop');
+});
+
+
+test('a push lookup survives a transient error and retries only its durable work', async t => {
+  const { command, ready, mockCommand, inspect, emit } = await runtime(t, {
     POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts: true }] }),
   });
   await mockCommand('options', { notificationStatus: 429 });
   await command('start'); await ready();
-  const status = await waitFor(() => command('status'), value => value.value.last_notification_sync_error === 'notification_sync_rate_limit', '429 must be visible');
-  assert.ok(status.value.next_notification_sync_at > Date.now() + 14 * 60000);
-  await mockCommand('options', { notificationStatus: 200, notifications: repostNotification(), holdNotifications: true });
-  const syncing = inspect('sync-due');
-  await waitFor(() => mockCommand('state'), value => value.notificationRequests === 2, 'lookup should be in flight');
-  await command('stop'); await mockCommand('release'); await syncing;
-  assert.equal((await inspect()).posts.length, 0);
-  assert.equal((await mockCommand('state')).messages.length, 0);
+  await emit('100', { uri: '/i/notifications' });
+  await waitFor(() => command('status'), value => value.value.last_notification_sync_error === 'notification_sync_rate_limit', 'failure should be retained');
+  assert.equal((await mockCommand('state')).acks.length, 1);
+  await mockCommand('options', { notificationStatus: 200, notifications: repostNotification(), embedBody: originalEmbed });
+  await inspect('sync-due');
+  await waitFor(() => mockCommand('state'), value => value.messages.length === 1, 'pending lookup must retry without a second push');
+  await inspect('sync-due');
+  assert.equal((await mockCommand('state')).notificationRequests, 2, 'successful lookup leaves no polling work');
+  await command('stop');
 });
 
-test('a rejected raw push can later be recovered with confirmed repost attribution', async t => {
+test('a second push during lookup keeps another durable lookup pending', async t => {
   const { command, ready, mockCommand, inspect, emit } = await runtime(t, {
     POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts: true }] }),
   });
-  await mockCommand('options', { embedBody: originalEmbed });
   await command('start'); await ready();
-  await waitFor(() => command('status'), value => value.value.last_notification_sync_at !== null, 'initial sync should finish');
-  await emit('100');
-  await waitFor(() => inspect(), value => value.posts[0]?.state === 'ignored', 'raw wrapper cannot prove the original');
-  await mockCommand('options', { notifications: repostNotification() });
-  await inspect('sync-due');
-  await waitFor(() => mockCommand('state'), value => value.messages.length === 1, 'confirmed relationship must recover the rejected push');
-  assert.equal((await inspect()).posts[0].reposted_by, 'demo_studio');
+  await mockCommand('options', { holdNotifications: true });
+  await emit('100', { uri: '/i/notifications' });
+  await waitFor(() => mockCommand('state'), value => value.notificationRequests === 1, 'first lookup must start');
+  await emit('101', { uri: '/i/notifications' });
+  await waitFor(() => mockCommand('state'), value => value.acks.length === 2, 'second push must be durable before ACK');
+  await mockCommand('options', { holdNotifications: false });
+  await mockCommand('release');
+  await waitFor(() => command('status'), value => value.value.last_notification_sync_at !== null, 'first lookup must complete');
+  await inspect('due');
+  await waitFor(() => mockCommand('state'), value => value.notificationRequests === 2, 'later push must cause another lookup');
   await command('stop');
 });

@@ -45,7 +45,7 @@ export function statusView(value) {
   const result = {};
   if (!value || typeof value !== 'object') return result;
   for (const field of ['enabled', 'connected', 'source_paused', 'registered']) if (typeof value[field] === 'boolean') result[field] = value[field];
-  for (const field of ['last_received_at', 'last_delivered_at', 'next_reconnect_at', 'last_notification_sync_at', 'next_notification_sync_at']) if (Number.isSafeInteger(value[field]) || value[field] === null) result[field] = value[field];
+  for (const field of ['last_received_at', 'last_delivered_at', 'next_reconnect_at', 'last_notification_sync_at', 'next_notification_sync_at', 'push_received', 'last_push_at', 'last_socket_close_code']) if (Number.isSafeInteger(value[field]) || value[field] === null) result[field] = value[field];
   for (const field of ['posts', 'jobs']) {
     if (value[field] && typeof value[field] === 'object') result[field] = Object.fromEntries(
       ['queued', 'retry', 'sending', 'resolved', 'ignored', 'delivered', 'failed', 'cancelled']
@@ -57,5 +57,9 @@ export function statusView(value) {
   }
   if (value.last_error === '' || known(value.last_error)) result.last_error = value.last_error;
   if (value.last_notification_sync_error === '' || known(value.last_notification_sync_error)) result.last_notification_sync_error = value.last_notification_sync_error;
+  if (value.notification_mode === 'push_only') result.notification_mode = value.notification_mode;
+  if (['', 'empty', 'accepted', 'notification_list', 'invalid_ciphertext', 'not_public_post', 'unconfigured_author', 'conflicting_post_urls'].includes(value.last_push_result)) result.last_push_result = value.last_push_result;
+  if (value.x_registration && ['on', 'off', 'unknown'].includes(value.x_registration.tweets)) result.x_registration = {
+    settings_present: value.x_registration.settings_present === true, tweets: value.x_registration.tweets };
   return result;
 }
