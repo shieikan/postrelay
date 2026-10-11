@@ -58,7 +58,7 @@ export function statusView(value) {
   if (value.last_error === '' || known(value.last_error)) result.last_error = value.last_error;
   if (value.last_notification_sync_error === '' || known(value.last_notification_sync_error)) result.last_notification_sync_error = value.last_notification_sync_error;
   if (value.notification_mode === 'push_only') result.notification_mode = value.notification_mode;
-  if (['', 'empty', 'accepted', 'notification_list', 'invalid_ciphertext', 'not_public_post', 'unconfigured_author', 'conflicting_post_urls'].includes(value.last_push_result)) result.last_push_result = value.last_push_result;
+  if (['', 'empty', 'accepted', 'notification_list', 'repost_lookup', 'invalid_ciphertext', 'not_public_post', 'unconfigured_author', 'conflicting_post_urls'].includes(value.last_push_result)) result.last_push_result = value.last_push_result;
   if (value.x_registration && ['on', 'off', 'unknown'].includes(value.x_registration.tweets)) result.x_registration = {
     settings_present: value.x_registration.settings_present === true, tweets: value.x_registration.tweets };
   return result;

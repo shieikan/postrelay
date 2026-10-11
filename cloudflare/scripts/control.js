@@ -4,8 +4,8 @@ import { errorText, statusView } from './diagnostics.js';
 
 async function main() {
   const action = process.argv[2];
-  if (process.argv.length !== 3 || !['status', 'start', 'stop', 'retry'].includes(action)) {
-    console.error('使い方: npm run control -- status|start|stop|retry');
+  if (process.argv.length !== 3 || !['status', 'start', 'stop', 'retry', 'reconcile'].includes(action)) {
+    console.error('使い方: npm run control -- status|start|stop|retry|reconcile');
     process.exitCode = 1; return;
   }
   const load = action === 'status' || action === 'stop' ? loadManagementSettings : loadSettings;

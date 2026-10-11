@@ -5,7 +5,7 @@ import { openSocket, registerX, readPostNotifications, validateCookies, validate
 import { notificationBatch, verifyCandidate } from './notifications.js';
 import { Store } from './store.js';
 
-const routes = new Map([['/api/status', 'GET'], ['/api/start', 'POST'], ['/api/stop', 'POST'], ['/api/retry', 'POST']]);
+const routes = new Map([['/api/status', 'GET'], ['/api/start', 'POST'], ['/api/stop', 'POST'], ['/api/retry', 'POST'], ['/api/reconcile', 'POST']]);
 const json = (value, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 const safeError = error => error instanceof RelayError ? error.code : 'internal_error';
 const sameChannel = (a, b) => typeof a === 'string' && typeof b === 'string' && a.replaceAll('-', '').toLowerCase() === b.replaceAll('-', '').toLowerCase();
@@ -108,6 +108,11 @@ export class Relay extends DurableObject {
           } catch (error) { loadError = error; }
         });
         if (loadError) throw loadError;
+      } else if (url.pathname === '/api/reconcile') {
+        if (!this.enabled) return json({ error: 'stopped' }, 409);
+        await this.load();
+        this.requestNotificationLookup(true);
+        await this.ctx.storage.sync();
       } else if (url.pathname === '/api/retry') {
         this.store.retryFailed(Date.now());
       }
@@ -188,8 +193,9 @@ export class Relay extends DurableObject {
     await this.schedule();
   }
 
-  requestNotificationLookup() {
+  requestNotificationLookup(recoverRecent = false) {
     if (!this.config.feeds.some(feed => feed.enabled && feed.include_reposts)) return;
+    if (recoverRecent) this.store.setMeta('notification_recovery_pending', true);
     this.store.setMeta('notification_lookup_sequence', this.store.meta('notification_lookup_sequence', 0) + 1);
     if (this.store.meta('notification_lookup_pending', false)) return;
     if (this.store.meta('notification_watermark') === null)
@@ -208,17 +214,19 @@ export class Relay extends DurableObject {
     this.syncingNotifications = true;
     const sequence = this.store.meta('notification_lookup_sequence', 0);
     const generation = this.generation;
-    const since = this.store.meta('notification_watermark', this.store.meta('last_received_at') ?? Date.now());
-    this.store.setMeta('notification_watermark', since);
+    const watermark = this.store.meta('notification_watermark', this.store.meta('last_received_at') ?? Date.now());
+    const since = this.store.meta('notification_recovery_pending', false) ? 0 : watermark;
+    this.store.setMeta('notification_watermark', watermark);
     this.store.setMeta('next_notification_sync_at', 0);
     try {
       const value = await readPostNotifications(this.env);
       if (!this.enabled || generation !== this.generation) return;
       const batch = notificationBatch(value, this.config.feeds, since, Date.now());
       for (const candidate of batch.candidates) this.store.accept(candidate, Date.now());
-      this.store.setMeta('notification_watermark', batch.watermark);
+      this.store.setMeta('notification_watermark', Math.max(watermark, batch.watermark));
       this.store.setMeta('last_notification_sync_at', Date.now());
       this.store.setMeta('last_notification_sync_error', '');
+      if (this.store.meta('notification_lookup_sequence', 0) === sequence) this.store.setMeta('notification_recovery_pending', false);
       this.store.setMeta('notification_lookup_pending', this.store.meta('notification_lookup_sequence', 0) !== sequence);
       await this.ctx.storage.sync();
     } catch (error) {
@@ -350,11 +358,20 @@ export class Relay extends DurableObject {
           let candidate;
           try { candidate = notificationCandidate(payload, this.config.feeds); }
           catch (error) {
-            const link = payload?.data?.url ?? payload?.data?.uri;
-            if (typeof link === 'string' && /^(?:https:\/\/(?:x|twitter)\.com)?\/i\/notifications(?:\?.*)?$/.test(link)) {
+            // Canonical post URLs have already passed conflict/URL checks.
+            // An outside original is only a trigger: the timeline must prove
+            // a public configured actor and oEmbed must verify the original.
+            if (error instanceof RelayError && error.code === 'unconfigured_author' &&
+              this.config.feeds.some(feed => feed.enabled && feed.include_reposts)) {
               this.requestNotificationLookup();
-              this.store.setMeta('last_push_result', 'notification_list');
-            } else throw error;
+              this.store.setMeta('last_push_result', 'repost_lookup');
+            } else {
+              const link = payload?.data?.url ?? payload?.data?.uri;
+              if (typeof link === 'string' && /^(?:https:\/\/(?:x|twitter)\.com)?\/i\/notifications(?:\?.*)?$/.test(link)) {
+                this.requestNotificationLookup();
+                this.store.setMeta('last_push_result', 'notification_list');
+              } else throw error;
+            }
           }
           if (candidate) {
             // Only the canonical candidate URL survives. Private push bodies/titles

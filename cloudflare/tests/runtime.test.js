@@ -315,3 +315,59 @@ test('a second push during lookup keeps another durable lookup pending', async t
   await waitFor(() => mockCommand('state'), value => value.notificationRequests === 2, 'later push must cause another lookup');
   await command('stop');
 });
+
+test('a push linking an unconfigured original resolves only a configured public repost', async t => {
+  const { command, ready, mockCommand, inspect, emit } = await runtime(t, {
+    POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts: true }] }),
+  });
+  await mockCommand('options', { notifications: repostNotification(), embedBody: originalEmbed });
+  await command('start'); await ready();
+  await emit('90', { uri: '/original/status/90' });
+  await waitFor(() => mockCommand('state'), value => value.acks.length === 1, 'push must be acknowledged');
+  await inspect('due');
+  assert.equal((await mockCommand('state')).messages.length, 1);
+  assert.equal((await inspect()).posts[0].reposted_by, 'demo_studio');
+  assert.doesNotMatch(JSON.stringify(await inspect()), /PRIVATE/);
+  await command('stop');
+});
+
+test('explicit recovery scans recent entries once and deduplicates older reposts', async t => {
+  const { command, ready, mockCommand, inspect, emit } = await runtime(t, {
+    POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts: true }] }),
+  });
+  await command('start'); await ready();
+  await emit('101');
+  await waitFor(() => mockCommand('state'), value => value.messages.length === 1, 'regular push must finish');
+  await mockCommand('options', { notifications: repostNotification(Date.now() - 3600000), embedBody: originalEmbed });
+  assert.equal((await command('reconcile')).status, 202);
+  await waitFor(() => mockCommand('state'), value => value.messages.length === 2, 'older missed repost must be recovered');
+  await command('reconcile'); await inspect('due');
+  assert.equal((await mockCommand('state')).messages.length, 2);
+  const requests = (await mockCommand('state')).notificationRequests;
+  await inspect('sync-due');
+  assert.equal((await mockCommand('state')).notificationRequests, requests);
+  await command('stop');
+  assert.equal((await command('reconcile')).status, 409);
+  assert.equal((await command('reconcile', false)).status, 401);
+});
+
+test('outside-original lookup never forwards an unconfigured actor or runs without repost opt-in', async t => {
+  for (const include_reposts of [false, true]) {
+    await t.test(String(include_reposts), async t => {
+      const { command, ready, mockCommand, inspect, emit } = await runtime(t, {
+        POSTRELAY_CONFIG: JSON.stringify({ feeds: [{ ...feed, include_reposts }] }),
+      });
+      const notifications = repostNotification();
+      notifications.globalObjects.users['10'].screen_name = 'outsider';
+      await mockCommand('options', { notifications, embedBody: originalEmbed });
+      await command('start'); await ready(); await emit('90', { uri: '/original/status/90' });
+      await waitFor(() => mockCommand('state'), value => value.acks.length === 1, 'push should finish');
+      await inspect('due');
+      const state = await mockCommand('state');
+      assert.equal(state.notificationRequests, include_reposts ? 1 : 0);
+      assert.equal(state.messages.length, 0);
+      assert.equal((await inspect()).posts.length, 0);
+      await command('stop');
+    });
+  }
+});

@@ -184,3 +184,13 @@ post IDs. Read errors and stopped generations do not advance the checkpoint.
 Push-triggered lookup work is persisted before ACK and retried up to eight times on failure. No recurring timeline polling runs after that work completes. This recovers recent notification gaps, not arbitrary historical posts or every
 event during an extended outage. The optional actor column is a nullable additive
 SQLite migration; older records retain their original behavior.
+
+### Recover missed notifications once
+
+With the installation running and reposts enabled, `npm run control -- reconcile`
+checks the latest 20 device-follow notifications once, including entries older
+than the saved checkpoint. Configured public actors and public original content
+are still verified. Persisted event IDs prevent duplicate delivery. This does not
+enable periodic polling, bypass upstream backoff, or recover unlimited history.
+A push linking an unconfigured original can trigger the same relationship check;
+the link alone never authorizes delivery from that author.
