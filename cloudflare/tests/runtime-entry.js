@@ -4,6 +4,10 @@ export default worker;
 export class TestRelay extends Relay {
   async fetch(request) {
     const path = new URL(request.url).pathname;
+    if (path === '/__test/health-tick') {
+      await this.tick();
+      return Response.json(this.status());
+    }
     if (path === '/__test/sync-due') {
       this.store.setMeta('next_notification_sync_at', 0);
       await this.tick();
@@ -31,7 +35,7 @@ export class TestRelay extends Relay {
       const input = await request.json();
       const execute = ({ operation, args = [] }) => {
         // Explicit test-only store operations, reached through the local DO binding.
-        if (!['accept', 'claimPost', 'claimJob', 'resolvePost', 'finish', 'post', 'counts', 'cleanup', 'retryFailed', 'meta', 'nextDue'].includes(operation))
+        if (!['accept', 'claimPost', 'claimJob', 'resolvePost', 'finish', 'post', 'counts', 'cleanup', 'retryFailed', 'meta', 'setMeta', 'nextDue'].includes(operation))
           return { error: 'unknown_test_operation' };
         try { return { value: this.store[operation](...args) ?? null }; }
         catch (error) { return { error: error.message }; }

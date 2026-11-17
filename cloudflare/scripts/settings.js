@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { readConfig } from '../src/core.js';
+import { readConfig, validateWebhook } from '../src/core.js';
 import { validateCookies } from '../src/upstream.js';
 
 // Cloudflare limits each secret to 5 KB. Use a conservative UTF-8 byte bound.
@@ -14,12 +14,12 @@ export function validateWorkerOrigin(value) {
   return value;
 }
 
-export function createSettings({ origin, handle, webhook, auth, csrf }) {
+export function createSettings({ origin, handle, webhook, auth, csrf, alertWebhook = '' }) {
   const settings = { version: 1, origin: validateWorkerOrigin(origin),
     config: { feeds: [{ id: 'default', handle, webhook_url: webhook, include: [], exclude: [],
       role_id: '', enabled: true, allow_unknown_kind: true }] },
     secrets: { ADMIN_TOKEN: randomBytes(32).toString('base64url'), STORAGE_KEY: randomBytes(32).toString('base64url'),
-      X_AUTH_TOKEN: auth, X_CSRF_TOKEN: csrf } };
+      X_AUTH_TOKEN: auth, X_CSRF_TOKEN: csrf, ALERT_WEBHOOK_URL: alertWebhook } };
   secretBindings(settings);
   return settings;
 }
@@ -40,11 +40,12 @@ export function secretBindings(settings) {
   managementSettings(settings);
   const config = readConfig(JSON.stringify(settings.config));
   validateCookies(settings.secrets);
-  const { ADMIN_TOKEN, STORAGE_KEY, X_AUTH_TOKEN, X_CSRF_TOKEN } = settings.secrets;
+  const { ADMIN_TOKEN, STORAGE_KEY, X_AUTH_TOKEN, X_CSRF_TOKEN, ALERT_WEBHOOK_URL = '' } = settings.secrets;
+  if (ALERT_WEBHOOK_URL !== '') validateWebhook(ALERT_WEBHOOK_URL);
   validateToken(STORAGE_KEY, 'invalid_storage_key');
   const POSTRELAY_CONFIG = JSON.stringify(config);
   if (Buffer.byteLength(POSTRELAY_CONFIG, 'utf8') > MAX_CONFIG_BYTES) throw new Error('config_too_large');
-  return { ADMIN_TOKEN, STORAGE_KEY, X_AUTH_TOKEN, X_CSRF_TOKEN, POSTRELAY_CONFIG };
+  return { ADMIN_TOKEN, STORAGE_KEY, X_AUTH_TOKEN, X_CSRF_TOKEN, POSTRELAY_CONFIG, ALERT_WEBHOOK_URL };
 }
 
 function checkPermissions(info, directory) {

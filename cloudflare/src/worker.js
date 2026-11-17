@@ -4,6 +4,7 @@ import { generateKeys, decryptPush, seal, unseal, fromBase64 } from './crypto.js
 import { openSocket, registerX, readPostNotifications, validateCookies, validateEndpoint, X_VAPID_KEY } from './upstream.js';
 import { notificationBatch, verifyCandidate } from './notifications.js';
 import { Store } from './store.js';
+import { HEALTH_TIMING, CONFIG_ERRORS, silenceSince, alertConditions, sendHealthAlert } from './health.js';
 
 const routes = new Map([['/api/status', 'GET'], ['/api/start', 'POST'], ['/api/stop', 'POST'], ['/api/retry', 'POST'], ['/api/reconcile', 'POST']]);
 const json = (value, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
@@ -39,6 +40,8 @@ export class Relay extends DurableObject {
     this.pingOutstanding = false;
     this.draining = false;
     this.syncingNotifications = false;
+    this.renewingRegistration = false;
+    this.alerting = false;
     this.messages = Promise.resolve();
     this.pendingMessages = 0;
   }
@@ -68,6 +71,13 @@ export class Relay extends DurableObject {
       last_push_result: this.store.meta('last_push_result', ''),
       last_socket_close_code: this.store.meta('last_socket_close_code'),
       x_registration: this.store.meta('x_registration'),
+      last_x_registration_at: this.store.meta('last_x_registration_at'),
+      last_x_registration_attempt_at: this.store.meta('last_x_registration_attempt_at'),
+      next_x_registration_at: this.store.meta('next_x_registration_at', 0),
+      last_x_registration_error: this.store.meta('last_x_registration_error', ''),
+      monitoring_started_at: this.store.meta('monitoring_started_at'),
+      alert_state: this.store.meta('alert_state', {}),
+      last_alert_error: this.store.meta('last_alert_error', ''),
       notification_mode: 'push_only',
       last_notification_sync_at: this.store.meta('last_notification_sync_at'),
       next_notification_sync_at: this.store.meta('notification_lookup_pending', false) ? this.store.meta('next_notification_sync_at', 0) : 0,
@@ -103,6 +113,8 @@ export class Relay extends DurableObject {
               await this.saveSession({ ...this.session, registered: false }, this.generation);
             }
             this.store.setMeta('source_paused', false);
+            if (this.store.meta('x_registration_paused', false)) this.store.setMeta('next_x_registration_at', 0);
+            this.store.setMeta('x_registration_paused', false);
             this.store.setMeta('last_error', '');
             // Do not bypass a persisted Mozilla backoff on repeated starts.
           } catch (error) { loadError = error; }
@@ -153,6 +165,7 @@ export class Relay extends DurableObject {
     // Arm recovery before network operations, even if this invocation is interrupted.
     await this.ctx.storage.setAlarm(Date.now() + 60000);
     try {
+      if (this.store.meta('monitoring_started_at') === null) this.store.setMeta('monitoring_started_at', Date.now());
       await this.load();
       if (!this.enabled) return;
       // Retention scans run hourly instead of spending free SQL row reads on
@@ -169,17 +182,84 @@ export class Relay extends DurableObject {
         this.pingOutstanding = true;
         this.deadline = Date.now() + 10000;
       }
+      await this.renewRegistration();
       await this.syncNotifications();
       await this.drain();
     } catch (error) {
       const code = safeError(error);
       this.store.setMeta('last_error', code);
-      if (['invalid_config', 'invalid_webhook', 'invalid_x_credentials', 'invalid_storage_key', 'storage_key_mismatch'].includes(code)) {
+      if (CONFIG_ERRORS.includes(code)) {
         this.store.setMeta('enabled', false);
         this.disconnect();
         await this.ctx.storage.deleteAlarm();
       }
-    } finally { await this.schedule(); }
+    } finally {
+      try { await this.checkHealth(); }
+      finally { await this.schedule(); }
+    }
+  }
+
+  async renewRegistration() {
+    if (!this.enabled || this.phase !== 'ready' || this.renewingRegistration || this.store.meta('source_paused', false) ||
+      Date.now() < this.store.meta('next_x_registration_at', 0)) return;
+    const now = Date.now();
+    const last = this.store.meta('last_x_registration_at');
+    const periodic = last === null || now - last >= HEALTH_TIMING.registration;
+    const silent = now - silenceSince(this.store) >= HEALTH_TIMING.silentRenewal &&
+      now - this.store.meta('last_x_registration_attempt_at', 0) >= HEALTH_TIMING.silentRenewal;
+    if (!periodic && !silent && !this.store.meta('last_x_registration_error', '')) return;
+    this.renewingRegistration = true;
+    const generation = this.generation;
+    this.store.setMeta('last_x_registration_attempt_at', now);
+    this.store.setMeta('next_x_registration_at', periodic ? now + HEALTH_TIMING.retry :
+      Math.min(now + HEALTH_TIMING.silentRenewal, last + HEALTH_TIMING.registration));
+    try {
+      const registration = await registerX(this.session, this.env);
+      if (!this.enabled || generation !== this.generation) return;
+      this.recordRegistration(registration);
+    } catch (error) {
+      if (!this.enabled || generation !== this.generation) return;
+      const code = safeError(error);
+      this.store.setMeta('last_error', code);
+      this.store.setMeta('last_x_registration_error', code);
+      if (error instanceof RelayError && !error.retryable) {
+        this.store.setMeta('source_paused', true);
+        this.store.setMeta('x_registration_paused', true);
+      }
+    } finally { this.renewingRegistration = false; }
+  }
+
+  recordRegistration(registration) {
+    if (this.store.meta('last_error', '') === this.store.meta('last_x_registration_error', '')) this.store.setMeta('last_error', '');
+    this.store.setMeta('x_registration', registration);
+    this.store.setMeta('last_x_registration_at', Date.now());
+    this.store.setMeta('next_x_registration_at', 0);
+    this.store.setMeta('last_x_registration_error', '');
+    this.store.setMeta('x_registration_paused', false);
+  }
+
+  async checkHealth() {
+    if (!this.env.ALERT_WEBHOOK_URL || this.alerting || Date.now() < this.store.meta('next_health_alert_at', 0)) return;
+    if (!this.enabled && !CONFIG_ERRORS.includes(this.store.meta('last_error', ''))) return;
+    this.alerting = true;
+    const generation = this.generation;
+    try {
+      const conditions = alertConditions(this.store, Date.now());
+      const state = this.store.meta('alert_state', {});
+      if (state.source?.active && this.enabled && this.phase !== 'ready') conditions.source = true;
+      for (const [condition, active] of Object.entries(conditions)) {
+        if (active === (state[condition]?.active ?? false)) continue;
+        await sendHealthAlert(this.env.ALERT_WEBHOOK_URL, condition, active);
+        state[condition] = { active, changed_at: Date.now() };
+        this.store.setMeta('alert_state', state);
+        this.store.setMeta('last_alert_error', '');
+        this.store.setMeta('next_health_alert_at', 0);
+        if (generation !== this.generation) break;
+      }
+    } catch (error) {
+      this.store.setMeta('last_alert_error', error instanceof RelayError ? error.code : 'health_alert_failed');
+      this.store.setMeta('next_health_alert_at', Date.now() + HEALTH_TIMING.retry);
+    } finally { this.alerting = false; }
   }
 
   async connectionFailed(code, retryable, overrideDelay = 0) {
@@ -188,7 +268,7 @@ export class Relay extends DurableObject {
     if (!this.enabled) return;
     const attempts = this.store.meta('connect_attempts', 0) + 1;
     this.store.setMeta('connect_attempts', attempts);
-    this.store.setMeta('source_paused', !retryable);
+    this.store.setMeta('source_paused', !retryable || this.store.meta('x_registration_paused', false));
     this.store.setMeta('next_reconnect_at', Date.now() + (overrideDelay || Math.min(5000 * (2 ** Math.min(attempts - 1, 10)), 300000)));
     await this.schedule();
   }
@@ -297,10 +377,11 @@ export class Relay extends DurableObject {
   async completeRegistration(generation) {
     this.phase = 'x_registration';
     this.deadline = Date.now() + 15000;
+    this.store.setMeta('last_x_registration_attempt_at', Date.now());
     const registration = await registerX(this.session, this.env);
     if (generation !== this.generation || !this.enabled) return;
-    this.store.setMeta('x_registration', registration);
     if (!await this.saveSession({ ...this.session, registered: true }, generation)) return;
+    this.recordRegistration(registration);
     this.ready();
   }
 
@@ -310,6 +391,7 @@ export class Relay extends DurableObject {
     this.lastMessageAt = Date.now();
     this.store.setMeta('connect_attempts', 0);
     this.store.setMeta('next_reconnect_at', 0);
+    if (this.store.meta('x_registration_paused', false)) return;
     this.store.setMeta('source_paused', false);
     this.store.setMeta('last_error', '');
   }

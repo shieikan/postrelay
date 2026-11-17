@@ -45,7 +45,8 @@ async function main() {
   const webhook = await secret('Discord Webhook URL');
   const auth = await secret('通知を受け取るXアカウントの auth_token');
   const csrf = await secret('同じXアカウントの ct0');
-  await saveSettings(process.cwd(), createSettings({ origin, handle, webhook, auth, csrf }));
+  const alertWebhook = await secret('監視警告用Discord Webhook URL（任意、空欄で無効）');
+  await saveSettings(process.cwd(), createSettings({ origin, handle, webhook, auth, csrf, alertWebhook }));
   console.log('設定を保存しました。Cloudflareへ登録するには npm run secrets を実行してください。');
 }
 

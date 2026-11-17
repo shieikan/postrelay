@@ -21,6 +21,7 @@ steps = [
     ('Discord Webhook URL', 'https://discord.com/api/webhooks/123/pty_hidden_webhook', True),
     ('Xアカウントの auth_token', 'pty_hidden_auth_token_123456', True),
     ('Xアカウントの ct0', 'pty_hidden_csrf_token_123456', True),
+    ('監視警告用Discord Webhook URL', 'https://discord.com/api/webhooks/456/pty_hidden_alert', True),
 ]
 transcript = b''
 seen = b''
@@ -57,6 +58,7 @@ try:
     assert settings['secrets']['X_AUTH_TOKEN'] == steps[4][1]
     assert settings['secrets']['X_CSRF_TOKEN'] == steps[5][1]
     assert settings['config']['feeds'][0]['webhook_url'] == steps[3][1]
+    assert settings['secrets']['ALERT_WEBHOOK_URL'] == steps[6][1]
     print('PTY setup saved synthetic credentials without echoing them.')
 finally:
     os.close(terminal)

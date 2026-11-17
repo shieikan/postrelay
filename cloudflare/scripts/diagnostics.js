@@ -18,6 +18,7 @@ const messages = {
   notification_sync_unavailable: 'Xの投稿通知一覧を取得できませんでした。次の照合で再試行します。',
   x_registration_rejected: 'Xが通知登録を受け付けませんでした。Xの通知設定と接続方式の対応状況を確認してください。',
   x_registration_unavailable: 'Xの通知登録を再試行します。',
+  health_alert_failed: '監視警告を送信できませんでした。警告用Webhookを確認してください。',
   push_server_backoff: '通知サーバーから30分の待機を指定されています。',
   push_connection_failed: '通知サーバーへの接続を再試行します。',
   push_disconnected: '通知サーバーとの接続が切れました。再接続を待ってください。',
@@ -45,7 +46,8 @@ export function statusView(value) {
   const result = {};
   if (!value || typeof value !== 'object') return result;
   for (const field of ['enabled', 'connected', 'source_paused', 'registered']) if (typeof value[field] === 'boolean') result[field] = value[field];
-  for (const field of ['last_received_at', 'last_delivered_at', 'next_reconnect_at', 'last_notification_sync_at', 'next_notification_sync_at', 'push_received', 'last_push_at', 'last_socket_close_code']) if (Number.isSafeInteger(value[field]) || value[field] === null) result[field] = value[field];
+  for (const field of ['last_received_at', 'last_delivered_at', 'next_reconnect_at', 'last_notification_sync_at', 'next_notification_sync_at', 'push_received', 'last_push_at', 'last_socket_close_code',
+    'last_x_registration_at', 'last_x_registration_attempt_at', 'next_x_registration_at', 'monitoring_started_at']) if (Number.isSafeInteger(value[field]) || value[field] === null) result[field] = value[field];
   for (const field of ['posts', 'jobs']) {
     if (value[field] && typeof value[field] === 'object') result[field] = Object.fromEntries(
       ['queued', 'retry', 'sending', 'resolved', 'ignored', 'delivered', 'failed', 'cancelled']
@@ -57,6 +59,17 @@ export function statusView(value) {
   }
   if (value.last_error === '' || known(value.last_error)) result.last_error = value.last_error;
   if (value.last_notification_sync_error === '' || known(value.last_notification_sync_error)) result.last_notification_sync_error = value.last_notification_sync_error;
+  for (const field of ['last_x_registration_error', 'last_alert_error']) {
+    if (value[field] === '' || known(value[field])) result[field] = value[field];
+  }
+  if (value.alert_state && typeof value.alert_state === 'object') {
+    result.alert_state = {};
+    for (const condition of ['silence', 'source', 'jobs']) {
+      const state = value.alert_state[condition];
+      if (typeof state?.active === 'boolean' && Number.isSafeInteger(state.changed_at))
+        result.alert_state[condition] = { active: state.active, changed_at: state.changed_at };
+    }
+  }
   if (value.notification_mode === 'push_only') result.notification_mode = value.notification_mode;
   if (['', 'empty', 'accepted', 'notification_list', 'repost_lookup', 'invalid_ciphertext', 'not_public_post', 'unconfigured_author', 'conflicting_post_urls'].includes(value.last_push_result)) result.last_push_result = value.last_push_result;
   if (value.x_registration && ['on', 'off', 'unknown'].includes(value.x_registration.tweets)) result.x_registration = {

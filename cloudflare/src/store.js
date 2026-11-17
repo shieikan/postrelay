@@ -32,6 +32,9 @@ export class Store {
   setMeta(key, value) {
     this.sql.exec('INSERT INTO metadata(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', key, JSON.stringify(value));
   }
+  hasFailedJobs() {
+    return this.sql.exec("SELECT 1 FROM jobs WHERE state = 'failed' LIMIT 1").toArray().length > 0;
+  }
   accept(candidate, now) {
     return this.storage.transactionSync(() => {
       const existing = this.sql.exec('SELECT state, reposted_by FROM posts WHERE id = ?', candidate.id).toArray()[0];

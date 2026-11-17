@@ -8,7 +8,7 @@ export default {
 export class Mock extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
-    this.state = { connections: 0, registrations: [], messages: [], acks: [], embedRequests: 0, discordRequests: 0,
+    this.state = { connections: 0, subscriptions: 0, registrations: [], messages: [], alerts: [], alertRequests: 0, acks: [], embedRequests: 0, discordRequests: 0,
       profileRequests: 0, notificationRequests: 0, pendingEmbeds: 0, unexpected: [], options: {} };
     this.socket = null;
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS channel (id TEXT)');
@@ -42,6 +42,7 @@ export class Mock extends DurableObject {
         const message = JSON.parse(event.data);
         if (message.messageType === 'hello') server.send(JSON.stringify({ messageType: 'hello', status: 200, uaid: state.options.uaid ?? uaid, use_webpush: true }));
         else if (message.messageType === 'register') {
+          state.subscriptions++;
           this.channel = message.channelID;
           this.ctx.storage.sql.exec('DELETE FROM channel');
           this.ctx.storage.sql.exec('INSERT INTO channel(id) VALUES (?)', this.channel);
@@ -87,6 +88,12 @@ export class Mock extends DurableObject {
       if (state.options.discordStatus && state.options.discordStatus !== 200) return Response.json({ retry_after: state.options.retryAfter ?? 30 }, { status: state.options.discordStatus });
       state.messages.push(await request.json());
       return Response.json({ id: 'synthetic-message' });
+    }
+    if (url.hostname === 'discord.com' && url.pathname === '/api/webhooks/456/synthetic-alert') {
+      state.alertRequests++;
+      if (state.options.alertStatus) return Response.json({}, { status: state.options.alertStatus });
+      state.alerts.push(await request.json());
+      return Response.json({ id: 'synthetic-alert' });
     }
     state.unexpected.push(url.origin + url.pathname);
     return new Response('Unexpected mock destination', { status: 502 });

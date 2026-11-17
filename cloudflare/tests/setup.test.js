@@ -8,6 +8,25 @@ import { statusView, errorText } from '../scripts/diagnostics.js';
 
 const inputs = { origin: 'https://postrelay.example.workers.dev', handle: 'demo_studio',
   webhook: 'https://discord.com/api/webhooks/123/synthetic', auth: 'synthetic_auth_cookie', csrf: 'synthetic_csrf_cookie' };
+
+test('optional health webhook is validated, uploaded and compatible with old settings', () => {
+  const alertWebhook = 'https://discord.com/api/webhooks/456/synthetic-alert';
+  const settings = createSettings({ ...inputs, alertWebhook });
+  assert.equal(secretBindings(settings).ALERT_WEBHOOK_URL, alertWebhook);
+  assert.equal(JSON.parse(secretBindings(settings).POSTRELAY_CONFIG).ALERT_WEBHOOK_URL, undefined);
+  delete settings.secrets.ALERT_WEBHOOK_URL;
+  assert.equal(secretBindings(settings).ALERT_WEBHOOK_URL, '');
+  assert.equal(secretBindings(createSettings(inputs)).ALERT_WEBHOOK_URL, '');
+  for (const invalid of ['https://example.com/webhook', alertWebhook + '?secret=value', null]) {
+    assert.throws(() => createSettings({ ...inputs, alertWebhook: invalid }), /invalid_webhook/);
+  }
+});
+
+test('health status exposes only known conditions, timestamps and error codes', () => {
+  assert.deepEqual(statusView({ last_x_registration_at: 123, last_alert_error: 'health_alert_failed',
+    alert_state: { silence: { active: true, changed_at: 456, token: 'PRIVATE' }, PRIVATE: { active: true, changed_at: 1 } } }),
+  { last_x_registration_at: 123, last_alert_error: 'health_alert_failed', alert_state: { silence: { active: true, changed_at: 456 } } });
+});
 async function directory(t) {
   const root = resolve('../work/cloudflare-setup'); await mkdir(root, { recursive: true });
   const dir = await mkdtemp(root + '/run-');
